@@ -26,7 +26,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY')
+app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-change-this')
 
 # Initialize SocketIO with CORS support
 socketio = SocketIO(app, cors_allowed_origins="*", logger=True, engineio_logger=True)
@@ -113,26 +113,47 @@ class CryptoManager:
     def decrypt_message(encrypted_message, private_key_pem):
         """Decrypt message with RSA private key"""
         try:
-            private_key = serialization.load_pem_private_key(
-                private_key_pem.encode('utf-8'),
-                password=None,
-                backend=default_backend()
-            )
-            
-            encrypted_bytes = base64.b64decode(encrypted_message.encode('utf-8'))
-            
-            decrypted = private_key.decrypt(
-                encrypted_bytes,
-                padding.OAEP(
-                    mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                    algorithm=hashes.SHA256(),
-                    label=None
+            # Validate input
+            if not encrypted_message or not private_key_pem:
+                logger.error("Missing encrypted message or private key")
+                return None
+                
+            # Load private key
+            try:
+                private_key = serialization.load_pem_private_key(
+                    private_key_pem.encode('utf-8'),
+                    password=None,
+                    backend=default_backend()
                 )
-            )
+            except Exception as e:
+                logger.error(f"Failed to load private key: {e}")
+                return None
             
-            return decrypted.decode('utf-8')
+            # Decode base64
+            try:
+                encrypted_bytes = base64.b64decode(encrypted_message.encode('utf-8'))
+            except Exception as e:
+                logger.error(f"Invalid base64 encoding: {e}")
+                return None
+            
+            # Decrypt
+            try:
+                decrypted = private_key.decrypt(
+                    encrypted_bytes,
+                    padding.OAEP(
+                        mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                        algorithm=hashes.SHA256(),
+                        label=None
+                    )
+                )
+                return decrypted.decode('utf-8')
+                
+            except Exception as e:
+                logger.error(f"Decryption failed: {e}")
+                return None
+                
         except Exception as e:
-            logger.error(f"Decryption error: {e}")
+            logger.error(f"Unexpected error in decrypt_message: {e}", exc_info=True)
             return None
 
 class MongoDBAuth:
@@ -442,66 +463,94 @@ def register():
 @login_required
 def dashboard():
     """Dashboard page - requires authentication"""
+    if 'username' not in session:
+        return redirect(url_for('login'))
+        
     username = session['username']
-    user_info = mongo_auth.get_user(username)
+    user = mongo_auth.get_user(username)
+    
+    if not user:
+        flash('User not found', 'danger')
+        return redirect(url_for('login'))
+    
     online_users = mongo_auth.get_online_users()
     
-    # Remove current user from online users list
-    if username in online_users:
-        online_users.remove(username)
+    # Get recent messages for the activity feed
+    recent_messages = list(mongo_auth.messages.find({
+        '$or': [
+            {'sender': username},
+            {'recipient': username}
+        ]
+    }).sort('timestamp', -1).limit(5))
     
-    return render_template('dashboard.html', user=user_info, online_users=online_users)
+    # Convert ObjectId to string for JSON serialization
+    for msg in recent_messages:
+        msg['_id'] = str(msg['_id'])
+        if 'timestamp' in msg and isinstance(msg['timestamp'], datetime):
+            msg['timestamp'] = msg['timestamp'].isoformat()
+    
+    return render_template('dashboard.html', 
+                         user=user, 
+                         online_users=online_users,
+                         recent_messages=recent_messages)
 
 @app.route('/chat/<recipient>')
+@login_required
 def chat(recipient):
     """Chat page with specific user"""
     if 'username' not in session:
-        flash('Please login to access this page', 'error')
+        return redirect(url_for('login'))
+        
+    username = session['username']
+    user = mongo_auth.get_user(username)
+    
+    if not user:
+        flash('User not found', 'danger')
         return redirect(url_for('login'))
     
-    username = session['username']
+    # Get user's public key for encryption
+    public_key_pem = mongo_auth.get_public_key(username)
     
-    # Check if recipient exists
-    recipient_info = mongo_auth.get_user(recipient)
-    if not recipient_info:
-        flash('User not found', 'error')
-        return redirect(url_for('dashboard'))
-    
-    # Get chat history (already serialized)
+    # Get messages between the two users
     messages = mongo_auth.get_messages(username, recipient)
     
-    return render_template('chat.html', 
-                         current_user=username, 
-                         recipient=recipient,
-                         messages=messages)
+    # Get online status of the recipient
+    online_users = mongo_auth.get_online_users()
+    is_recipient_online = recipient in online_users
+    
+    return render_template('chat.html',
+                           user=user,
+                           recipient=recipient,
+                           messages=messages,
+                           public_key=public_key_pem,
+                           is_recipient_online=is_recipient_online)
 
 @app.route('/settings', methods=['GET', 'POST'])
 @login_required
 def user_settings():
-    username = session.get('username')
-    if not username:
+    if 'username' not in session:
         return redirect(url_for('login'))
     
-    # Get user data from database
+    username = session['username']
     user = mongo_auth.get_user(username)
+    
     if not user:
         flash('User not found', 'danger')
         return redirect(url_for('login'))
-        
+    
     if request.method == 'POST':
         # Update email if provided and different
         new_email = request.form.get('email')
         if new_email and new_email != user.get('email', ''):
             if not re.match(r'[^@]+@[^@]+\.[^@]+', new_email):
                 flash('Invalid email address', 'danger')
-            else:
-                mongo_auth.users.update_one(
-                    {'username': username},
-                    {'$set': {'email': new_email}}
-                )
-                flash('Email updated successfully', 'success')
-                # Update user data
-                user['email'] = new_email
+                return redirect(url_for('user_settings'))
+                
+            mongo_auth.users.update_one(
+                {'username': username},
+                {'$set': {'email': new_email}}
+            )
+            flash('Email updated successfully', 'success')
         
         # Update password if provided
         current_password = request.form.get('current_password')
@@ -509,39 +558,31 @@ def user_settings():
         confirm_password = request.form.get('confirm_password')
         
         if current_password and new_password and confirm_password:
-            # Get user with password for verification
-            user_with_password = mongo_auth.users.find_one(
-                {'username': username},
-                {'password': 1}
-            )
-            
-            if not user_with_password or 'password' not in user_with_password:
-                flash('Error: Could not verify current password', 'danger')
-            elif not bcrypt.checkpw(current_password.encode('utf-8'), user_with_password['password']):
+            if not bcrypt.checkpw(current_password.encode('utf-8'), user['password']):
                 flash('Current password is incorrect', 'danger')
-            elif new_password != confirm_password:
+                return redirect(url_for('user_settings'))
+                
+            if new_password != confirm_password:
                 flash('New passwords do not match', 'danger')
-            elif len(new_password) < 8:
+                return redirect(url_for('user_settings'))
+                
+            if len(new_password) < 8:
                 flash('Password must be at least 8 characters long', 'danger')
-            else:
-                hashed = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt())
-                mongo_auth.users.update_one(
-                    {'username': username},
-                    {'$set': {'password': hashed}}
-                )
-                flash('Password updated successfully', 'success')
+                return redirect(url_for('user_settings'))
+                
+            hashed = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt())
+            mongo_auth.users.update_one(
+                {'username': username},
+                {'$set': {'password': hashed}}
+            )
+            flash('Password updated successfully', 'success')
         
         # Refresh user data
         user = mongo_auth.get_user(username)
-        
-    # Prepare user data for template (remove sensitive info)
-    user_data = {
-        'username': user.get('username'),
-        'email': user.get('email', 'Not set'),
-        'created_at': user.get('created_at', datetime.utcnow())
-    }
-        
-    return render_template('settings.html', user=user_data)
+        return redirect(url_for('user_settings'))
+    
+    # For GET request, render the settings page with current user data
+    return render_template('settings.html', user=user)
 
 @app.route('/logout')
 @login_required
@@ -657,7 +698,7 @@ def handle_message(data):
                     'sender': sender,
                     'encrypted_content': encrypted_message,
                     'timestamp': datetime.utcnow().isoformat()
-                }, room=recipient)
+                }, room=active_connections[recipient])  # Use the recipient's socket ID
             
             # Confirm message sent
             emit('message_sent', {
@@ -682,18 +723,30 @@ def handle_decrypt_message(data):
     
     try:
         username = session['username']
+        
+        # Validate request data
+        if 'encrypted_content' not in data or 'message_id' not in data:
+            logger.error(f"Missing required fields in decrypt_message: {data.keys()}")
+            emit('error', {'message': 'Invalid request data'})
+            return
+            
         encrypted_content = data['encrypted_content']
         message_id = data['message_id']
+        
+        logger.info(f"Decryption request from {username} for message {message_id[:8]}...")
         
         # Get user's private key
         private_key = mongo_auth.get_private_key(username)
         if not private_key:
+            logger.error(f"Private key not found for user {username}")
             emit('error', {'message': 'Private key not found'})
             return
         
         # Decrypt the message
         decrypted_message = CryptoManager.decrypt_message(encrypted_content, private_key)
         if decrypted_message is not None:
+            logger.info(f"Successfully decrypted message {message_id[:8]}... for {username}")
+            
             # Send decryption status
             emit('decryption_status', {
                 'message_id': message_id,
@@ -710,11 +763,18 @@ def handle_decrypt_message(data):
                 'timestamp': datetime.utcnow().isoformat()
             })
         else:
-            emit('error', {'message': 'Failed to decrypt message'})
+            error_msg = 'Failed to decrypt message - invalid key or corrupted data'
+            logger.error(f"{error_msg} for message {message_id[:8]}...")
+            emit('error', {'message': error_msg})
             
+    except KeyError as ke:
+        error_msg = f"Missing required field: {ke}"
+        logger.error(error_msg)
+        emit('error', {'message': error_msg})
     except Exception as e:
-        logger.error(f"Decrypt message error: {e}")
-        emit('error', {'message': 'Failed to decrypt message'})
+        error_msg = f"Unexpected error during decryption: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        emit('error', {'message': 'An error occurred while decrypting the message'})
 
 @app.route('/health')
 def health_check():
