@@ -6,3 +6,4 @@ python-engineio
 python-socketio
 gunicorn
 eventlet
+Werkzeug
