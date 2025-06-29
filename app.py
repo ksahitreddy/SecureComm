@@ -339,37 +339,70 @@ class MongoDBAuth:
     def save_message(self, sender, recipient, encrypted_message, message_id):
         """Save encrypted message to database"""
         try:
-            message_doc = {
-                "message_id": message_id,
-                "sender": sender,
-                "recipient": recipient,
-                "encrypted_content": encrypted_message,
-                "timestamp": datetime.utcnow(),
-                "delivered": False,
-                "read": False
+            message = {
+                'sender': sender,
+                'recipient': recipient,
+                'encrypted_content': encrypted_message,
+                'timestamp': datetime.utcnow(),
+                'message_id': message_id,
+                'delivered': False  # Will be set to True when delivered to recipient
             }
-            
-            result = self.messages.insert_one(message_doc)
-            return result.inserted_id is not None
+            result = self.messages.insert_one(message)
+            return str(result.inserted_id)
         except Exception as e:
-            logger.error(f"Save message error: {e}")
+            logger.error(f"Error saving message: {e}")
             return False
     
     def get_messages(self, user1, user2, limit=50):
         """Get messages between two users (returns JSON-safe format)"""
+        query = {
+            "$or": [
+                {"$and": [{"sender": user1}, {"recipient": user2}]},
+                {"$and": [{"sender": user2}, {"recipient": user1}]}
+            ]
+        }
+        
+        messages = list(self.messages
+                        .find(query)
+                        .sort("timestamp", -1)
+                        .limit(limit))
+        
+        # Convert ObjectId to string for JSON serialization
+        return self._serialize_documents(messages)
+        
+    def search_users(self, query, current_user):
+        """
+        Search for users by username (case-insensitive partial match)
+        Returns list of users with their online status
+        """
         try:
-            messages = self.messages.find({
-                "$or": [
-                    {"sender": user1, "recipient": user2},
-                    {"sender": user2, "recipient": user1}
-                ]
-            }).sort("timestamp", -1).limit(limit)
+            # Create a case-insensitive regex pattern for partial matching
+            regex_pattern = f".*{re.escape(query)}.*"
             
-            # Convert to list and serialize
-            message_list = list(messages)
-            return self._serialize_documents(message_list)
+            # Find users matching the query (case-insensitive)
+            users_cursor = self.users.find({
+                "username": {"$regex": regex_pattern, "$options": 'i'},
+                "is_active": True,
+                "username": {"$ne": current_user}  # Exclude current user from results
+            }, {"password": 0})  # Exclude password hash
+            
+            # Get list of online users for status
+            online_users = [user for user in self.get_online_users() if user != current_user]
+            
+            # Format results with online status
+            results = []
+            for user in users_cursor:
+                username = user['username']
+                results.append({
+                    'username': username,
+                    'is_online': username in online_users
+                })
+                
+            return results
+            
         except Exception as e:
-            logger.error(f"Get messages error: {e}")
+            logger.error(f"Error searching users: {str(e)}")
+            return []
 
 # Login required decorator
 def login_required(f):
@@ -603,7 +636,7 @@ def logout():
 # Socket.IO Events
 @socketio.on('connect')
 def on_connect():
-    """Handle client connection"""
+    """Handle client connection and deliver pending messages"""
     if 'username' in session:
         username = session['username']
         active_connections[username] = request.sid
@@ -627,6 +660,44 @@ def on_connect():
                 'status': 'online',
                 'timestamp': datetime.utcnow().isoformat()
             }, broadcast=True, skip_sid=request.sid)
+            
+            # Check for undelivered messages
+            try:
+                undelivered_messages = mongo_auth.messages.find({
+                    'recipient': username,
+                    'delivered': False
+                })
+                
+                for msg in undelivered_messages:
+                    # Mark as delivered
+                    mongo_auth.messages.update_one(
+                        {'_id': msg['_id']},
+                        {'$set': {'delivered': True}}
+                    )
+                    
+                    # Send the message to the user
+                    emit('new_message', {
+                        'message_id': msg['message_id'],
+                        'sender': msg['sender'],
+                        'encrypted_content': msg['encrypted_content'],
+                        'timestamp': msg['timestamp'].isoformat(),
+                        'delivered': True
+                    }, room=request.sid)
+                    
+                    # Notify sender that message was delivered
+                    if msg['sender'] in active_connections:
+                        emit('message_status', {
+                            'message_id': msg['message_id'],
+                            'status': 'delivered',
+                            'recipient': username,
+                            'timestamp': datetime.utcnow().isoformat()
+                        }, room=active_connections[msg['sender']])
+                        
+                if undelivered_messages and undelivered_messages.retrieved > 0:
+                    logger.info(f"Delivered {undelivered_messages.retrieved} pending messages to {username}")
+                    
+            except Exception as e:
+                logger.error(f"Error delivering pending messages to {username}: {e}", exc_info=True)
         
         logger.info(f"User connected: {username}. Online users: {all_online_users}")
     else:
@@ -663,7 +734,7 @@ def on_disconnect():
 
 @socketio.on('send_message')
 def handle_message(data):
-    """Handle encrypted message sending"""
+    """Handle encrypted message sending with offline support"""
     if 'username' not in session:
         emit('error', {'message': 'Not authenticated'})
         return
@@ -673,6 +744,7 @@ def handle_message(data):
         recipient = data['recipient']
         message = data['message']
         message_id = secrets.token_urlsafe(16)
+        is_recipient_online = recipient in active_connections
         
         # Get recipient's public key
         recipient_public_key = mongo_auth.get_public_key(recipient)
@@ -681,14 +753,30 @@ def handle_message(data):
             return
         
         # Encrypt the message
-        encrypted_message = CryptoManager.encrypt_message(message, recipient_public_key)
-        if not encrypted_message:
+        try:
+            encrypted_message = CryptoManager.encrypt_message(message, recipient_public_key)
+            if not encrypted_message:
+                emit('error', {'message': 'Failed to encrypt message'})
+                return
+        except Exception as e:
+            logger.error(f"Encryption error: {e}", exc_info=True)
             emit('error', {'message': 'Failed to encrypt message'})
             return
         
-        # Save encrypted message to database
-        if mongo_auth.save_message(sender, recipient, encrypted_message, message_id):
-            
+        # Save encrypted message to database with delivery status
+        message_doc = {
+            'sender': sender,
+            'recipient': recipient,
+            'encrypted_content': encrypted_message,
+            'timestamp': datetime.utcnow(),
+            'message_id': message_id,
+            'delivered': is_recipient_online  # Mark as delivered if recipient is online
+        }
+        
+        # Save to database
+        result = mongo_auth.messages.insert_one(message_doc)
+        
+        if result.inserted_id:
             # Send encryption status to sender
             emit('encryption_status', {
                 'message_id': message_id,
@@ -700,26 +788,40 @@ def handle_message(data):
             })
             
             # Send encrypted message to recipient if online
-            if recipient in active_connections:
-                socketio.emit('new_message', {
-                    'message_id': message_id,
-                    'sender': sender,
-                    'encrypted_content': encrypted_message,
-                    'timestamp': datetime.utcnow().isoformat()
-                }, room=active_connections[recipient])  # Use the recipient's socket ID
+            if is_recipient_online:
+                try:
+                    socketio.emit('new_message', {
+                        'message_id': message_id,
+                        'sender': sender,
+                        'encrypted_content': encrypted_message,
+                        'timestamp': datetime.utcnow().isoformat(),
+                        'delivered': True
+                    }, room=active_connections[recipient])
+                except Exception as e:
+                    logger.error(f"Failed to send message to {recipient}: {e}", exc_info=True)
+                    # Don't mark as delivered if we couldn't send it
+                    mongo_auth.messages.update_one(
+                        {'_id': result.inserted_id},
+                        {'$set': {'delivered': False}}
+                    )
             
-            # Confirm message sent
-            emit('message_sent', {
+            # Send delivery confirmation to sender
+            emit('message_status', {
                 'message_id': message_id,
+                'status': 'delivered' if is_recipient_online else 'sent',
                 'recipient': recipient,
                 'timestamp': datetime.utcnow().isoformat()
             })
+            
+            # If recipient is offline, queue for delivery when they come online
+            if not is_recipient_online:
+                logger.info(f"Message {message_id} queued for offline delivery to {recipient}")
             
         else:
             emit('error', {'message': 'Failed to save message'})
             
     except Exception as e:
-        logger.error(f"Handle message error: {e}")
+        logger.error(f"Handle message error: {e}", exc_info=True)
         emit('error', {'message': 'Failed to send message'})
 
 @socketio.on('decrypt_message')
@@ -750,30 +852,28 @@ def handle_decrypt_message(data):
             emit('error', {'message': 'Private key not found'})
             return
         
-        # Decrypt the message
-        decrypted_message = CryptoManager.decrypt_message(encrypted_content, private_key)
-        if decrypted_message is not None:
-            logger.info(f"Successfully decrypted message {message_id[:8]}... for {username}")
-            
-            # Send decryption status
-            emit('decryption_status', {
+        try:
+            # Decrypt the message
+            decrypted_message = CryptoManager.decrypt_message(encrypted_content, private_key)
+            if decrypted_message is not None:
+                logger.info(f"Successfully decrypted message {message_id[:8]}... for {username}")
+                
+                # Send decryption status
+                emit('message_decrypted', {
+                    'message_id': message_id,
+                    'status': 'decrypted',
+                    'content': decrypted_message
+                })
+            else:
+                raise Exception("Decryption returned None")
+                
+        except Exception as e:
+            logger.error(f"Failed to decrypt message {message_id[:8]}... for {username}: {str(e)}", exc_info=True)
+            emit('decryption_error', {
                 'message_id': message_id,
-                'status': 'decrypted',
-                'encrypted_length': len(encrypted_content),
-                'decrypted_length': len(decrypted_message),
-                'timestamp': datetime.utcnow().isoformat()
+                'status': 'failed',
+                'message': 'Failed to decrypt message: ' + str(e)
             })
-            
-            # Send decrypted content
-            emit('message_decrypted', {
-                'message_id': message_id,
-                'content': decrypted_message,
-                'timestamp': datetime.utcnow().isoformat()
-            })
-        else:
-            error_msg = 'Failed to decrypt message - invalid key or corrupted data'
-            logger.error(f"{error_msg} for message {message_id[:8]}...")
-            emit('error', {'message': error_msg})
             
     except KeyError as ke:
         error_msg = f"Missing required field: {ke}"
@@ -782,7 +882,6 @@ def handle_decrypt_message(data):
     except Exception as e:
         error_msg = f"Unexpected error during decryption: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        emit('error', {'message': 'An error occurred while decrypting the message'})
 
 @app.route('/health')
 def health_check():
@@ -790,9 +889,86 @@ def health_check():
     try:
         # Test MongoDB connection
         mongo_auth.client.admin.command('ping')
-        return jsonify({"status": "healthy", "database": "connected"})
+        return jsonify({
+            'status': 'healthy',
+            'timestamp': datetime.utcnow().isoformat(),
+            'online_users': len(online_users),
+            'active_connections': len(active_connections)
+        }), 200
     except Exception as e:
         return jsonify({"status": "unhealthy", "error": str(e)}), 500
+
+@app.route('/api/chat/clear', methods=['POST'])
+@login_required
+def clear_chat():
+    try:
+        current_user = session.get('username')
+        if not current_user:
+            return jsonify({'success': False, 'message': 'User not authenticated'}), 401
+            
+        data = request.get_json()
+        other_user = data.get('other_user')
+        
+        if not other_user:
+            return jsonify({'success': False, 'message': 'Other user is required'}), 400
+            
+        # Delete messages in both directions
+        result = mongo_auth.messages.delete_many({
+            '$or': [
+                {'sender': current_user, 'recipient': other_user},
+                {'sender': other_user, 'recipient': current_user}
+            ]
+        })
+        
+        # Notify both users to clear their chat UI
+        socketio.emit('chat_cleared', {
+            'from_user': current_user,
+            'with_user': other_user
+        })
+        
+        return jsonify({
+            'success': True,
+            'message': f'Chat with {other_user} has been cleared',
+            'deleted_count': result.deleted_count
+        })
+        
+    except Exception as e:
+        logger.error(f"Error clearing chat: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': 'Failed to clear chat'}), 500
+
+@app.route('/api/users/search', methods=['GET'])
+@login_required
+def search_users():
+    """Search for users by username (case-insensitive partial match)"""
+    try:
+        query = request.args.get('q', '').strip()
+        if not query:
+            return jsonify({
+                'success': False,
+                'message': 'Search query is required'
+            }), 400
+            
+        current_user = session.get('username')
+        if not current_user:
+            return jsonify({
+                'success': False,
+                'message': 'User not authenticated'
+            }), 401
+            
+        # Search for users
+        results = mongo_auth.search_users(query, current_user)
+        
+        return jsonify({
+            'success': True,
+            'users': results
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in search_users: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': 'An error occurred while searching for users'
+        }), 500
 
 # Error handlers
 @app.errorhandler(500)
