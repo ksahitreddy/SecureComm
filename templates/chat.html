@@ -1,592 +1,309 @@
-<!DOCTYPE html>
-<html lang="en" data-bs-theme="light">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Secure Chat - End-to-End Encrypted Messaging{% endblock %}</title>
-    
-    <!-- Favicon -->
-    <link rel="icon" type="image/png" href="https://img.icons8.com/color/48/000000/secure-message.png">
-    
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    
-    <!-- Bootstrap 5.3 CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    
-    <!-- Font Awesome 6 -->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    
-    <!-- Custom CSS -->
-    <style>
-        :root {
-            --primary-color: #6366f1;
-            --primary-hover: #4f46e5;
-            --secondary-color: #f8fafc;
-            --text-primary: #1e293b;
-            --text-secondary: #64748b;
-            --success-color: #10b981;
-            --danger-color: #ef4444;
-            --warning-color: #f59e0b;
-            --border-radius: 12px;
-            --box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-            --transition: all 0.3s ease;
-        }
-        
-        [data-bs-theme="dark"] {
-            --primary-color: #818cf8;
-            --primary-hover: #6366f1;
-            --secondary-color: #1e293b;
-            --text-primary: #f8fafc;
-            --text-secondary: #1c2c3f;  /* Lighter gray for better contrast */
-            --success-color: #34d399;
-            --danger-color: #f87171;
-            --warning-color: #fbbf24;
-            --bs-body-color: #e2e8f0;  /* Lighter text for better contrast */
-            --bs-body-bg: #0f172a;    /* Slightly darker background */
-            --bs-gray-200: #1e293b;   /* Darker gray for cards */
-            --bs-light: #1e293b;      /* Darker light variant */
-        }
-        
-        body {
-            font-family: 'Poppins', sans-serif;
-            background-color: var(--secondary-color);
-            color: var(--text-primary);
-            transition: var(--transition);
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-        
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-        
-        ::-webkit-scrollbar-track {
-            background: var(--secondary-color);
-        }
-        
-        ::-webkit-scrollbar-thumb {
-            background: var(--primary-color);
-            border-radius: 10px;
-        }
-        
-        /* Navigation */
-        .navbar {
-            background: linear-gradient(135deg, var(--primary-color), #8b5cf6);
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            padding: 0.8rem 0;
-        }
-        
-        .navbar-brand {
-            font-weight: 700;
-            font-size: 1.5rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        
-        .navbar-brand i {
-            color: #fff;
-        }
-        
-        /* Buttons */
-        .btn-primary {
-            background-color: var(--primary-color);
-            border-color: var(--primary-color);
-            border-radius: 8px;
-            padding: 0.5rem 1.25rem;
-            font-weight: 500;
-            transition: var(--transition);
-        }
-        
-        .btn-primary:hover {
-            background-color: var(--primary-hover);
-            border-color: var(--primary-hover);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
-        }
-        
-        .btn-outline-light {
-            border-radius: 8px;
-            padding: 0.4rem 1rem;
-            font-weight: 500;
-            transition: var(--transition);
-        }
-        
-        /* Cards */
-        .card {
-            border: none;
-            border-radius: var(--border-radius);
-            box-shadow: var(--box-shadow);
-            transition: var(--transition);
-            background-color: var(--bs-body-bg);
-            margin-bottom: 1.5rem;
-            color: var(--bs-body-color);
-        }
-        
-        /* Ensure card text is readable in dark mode */
-        [data-bs-theme="dark"] .card {
-            background-color: #1e293b;
-            color: #e2e8f0;
-        }
-        
-        /* Make sure headings are readable */
-        [data-bs-theme="dark"] .card h1,
-        [data-bs-theme="dark"] .card h2,
-        [data-bs-theme="dark"] .card h3,
-        [data-bs-theme="dark"] .card h4,
-        [data-bs-theme="dark"] .card h5,
-        [data-bs-theme="dark"] .card h6 {
-            color: #f8fafc;
-        }
-        
-        /* Style for form controls in dark mode */
-        [data-bs-theme="dark"] .form-control,
-        [data-bs-theme="dark"] .form-select {
-            background-color: #1e293b;
-            border-color: #334155;
-            color: #e2e8f0;
-        }
-        
-        [data-bs-theme="dark"] .form-control:focus,
-        [data-bs-theme="dark"] .form-select:focus {
-            background-color: #1e293b;
-            border-color: #4f46e5;
-            color: #e2e8f0;
-            box-shadow: 0 0 0 0.25rem rgba(99, 102, 241, 0.25);
-        }
-        
-        /* Style for list group items */
-        [data-bs-theme="dark"] .list-group-item {
-            background-color: #1e293b;
-            border-color: #334155;
-            color: #e2e8f0;
-        }
-        
-        [data-bs-theme="dark"] .list-group-item:hover {
-            background-color: #1e293b;
-        }
-        
-        /* Style for text muted */
-        [data-bs-theme="dark"] .text-muted {
-            color: #94a3b8 !important;
-        }
-        
-        .card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
-        }
-        
-        .card-header {
-            background-color: transparent;
-            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-            padding: 1.25rem 1.5rem;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-        
-        /* Messages */
-        .message-bubble {
-            max-width: 75%;
-            margin: 0.5rem 0;
-            padding: 0.75rem 1.25rem;
-            border-radius: var(--border-radius);
-            position: relative;
-            word-wrap: break-word;
-            transition: var(--transition);
-            animation: fadeIn 0.3s ease-out;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        .message-sent {
-            background: linear-gradient(135deg, var(--primary-color), #8b5cf6);
-            color: white;
-            margin-left: auto;
-            border-bottom-right-radius: 4px;
-            box-shadow: 0 2px 6px rgba(99, 102, 241, 0.2);
-        }
-        
-        .message-received {
-            background-color: var(--bs-gray-200);
-            color: var(--text-primary);
-            margin-right: auto;
-            border-bottom-left-radius: 4px;
-        }
-        
-        /* Ensure text is readable in dark mode */
-        [data-bs-theme="dark"] .message-received {
-            background-color: #1e293b;
-            color: #e2e8f0;
-            border: 1px solid #334155;
-        }
-        
-        .message-time {
-            font-size: 0.7rem;
-            opacity: 0.8;
-            margin-top: 0.25rem;
-            display: block;
-            text-align: right;
-        }
-        
-        /* Chat container */
-        .chat-container {
-            height: 60vh;
-            overflow-y: auto;
-            padding: 1.5rem;
-            background-color: var(--bs-body-bg);
-            border-radius: var(--border-radius);
-            margin-bottom: 1.5rem;
-            scroll-behavior: smooth;
-        }
-        
-        /* User status */
-        .user-status {
-            display: inline-flex;
-            align-items: center;
-            font-size: 0.85rem;
-            padding: 0.25rem 0.75rem;
-            border-radius: 20px;
-            background-color: var(--bs-gray-100);
-            margin-right: 0.5rem;
-            margin-bottom: 0.5rem;
-            transition: var(--transition);
-        }
-        
-        .user-status:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        }
-        
-        .status-indicator {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            margin-right: 6px;
-            display: inline-block;
-            flex-shrink: 0;
-        }
-        
-        .online { 
-            background-color: var(--success-color); 
-            box-shadow: 0 0 8px var(--success-color); 
-        }
-        
-        .offline { 
-            background-color: var(--danger-color); 
-        }
-        
-        /* Dashboard text contrast improvements */
-        [data-bs-theme="light"] .card {
-            --bs-card-bg: #ffffff;
-            --bs-card-color: #212529;
-            --bs-card-cap-bg: #f8f9fa;
-            --bs-card-cap-color: #212529;
-        }
-        
-        [data-bs-theme="dark"] .card {
-            --bs-card-bg: #1e293b;
-            --bs-card-color: #e2e8f0;
-            --bs-card-cap-bg: #1e293b;
-            --bs-card-cap-color: #ffffff;
-        }
-        
-        /* Make sure text is readable in cards */
-        .card {
-            color: var(--bs-card-color);
-            background-color: var(--bs-card-bg);
-        }
-        
-        .card-header {
-            background-color: var(--bs-card-cap-bg);
-            color: var(--bs-card-cap-color);
-        }
-        
-        /* Ensure text is readable in dark mode */
-        [data-bs-theme="dark"] .text-body-secondary {
-            color: #94a3b8 !important;
-        }
-        
-        [data-bs-theme="dark"] .text-dark {
-            color: #f8fafc !important;
-        }
-        
-        /* Status text contrast */
-        .user-status {
-            display: inline-flex;
-            align-items: center;
-            color: var(--bs-body-color);
-            background-color: var(--bs-light);
-            padding: 0.25rem 0.5rem;
-            border-radius: 1rem;
-            font-size: 0.8rem;
-            white-space: nowrap;
-        }
-        
-        [data-bs-theme="dark"] .user-status {
-            background-color: rgba(255, 255, 255, 0.1);
-        }
-        
-        /* Encryption status */
-        .encryption-status {
-            font-size: 0.8rem;
-            color: var(--bs-body-color);
-            margin-top: 0.5rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            background-color: var(--bs-light);
-            padding: 0.5rem;
-            border-radius: 0.5rem;
-            border: 1px solid var(--bs-border-color);
-        }
-        
-        [data-bs-theme="dark"] .encryption-status {
-            background-color: rgba(255, 255, 255, 0.05);
-        }
-        
-        .encryption-indicator {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            display: inline-block;
-        }
-        
-        .encrypted { background-color: var(--success-color); }
-        .decrypted { background-color: var(--warning-color); }
-        .error { background-color: var(--danger-color); }
-        
-        /* Forms */
-        .form-control, .form-select {
-            border-radius: 8px;
-            padding: 0.75rem 1rem;
-            border: 1px solid rgba(0, 0, 0, 0.1);
-            transition: var(--transition);
-        }
-        
-        .form-control:focus, .form-select:focus {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 0.25rem rgba(99, 102, 241, 0.25);
-        }
-        
-        /* Alerts */
-        .alert {
-            border: none;
-            border-radius: 8px;
-            padding: 1rem 1.5rem;
-            box-shadow: var(--box-shadow);
-        }
-        
-        /* Theme toggle */
-        .theme-toggle {
-            background: none;
-            border: none;
-            color: var(--text-primary);
-            font-size: 1.25rem;
-            cursor: pointer;
-            padding: 0.5rem;
-            border-radius: 50%;
-            transition: var(--transition);
-        }
-        
-        .theme-toggle:hover {
-            background-color: rgba(0, 0, 0, 0.05);
-        }
-        
-        /* Responsive adjustments */
-        @media (max-width: 768px) {
-            .chat-container {
-                height: 50vh;
-            }
-            
-            .message-bubble {
-                max-width: 85%;
-            }
-        }
-        
-        /* Animations */
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-            100% { transform: scale(1); }
-        }
-        
-        .pulse {
-            animation: pulse 2s infinite;
-        }
-    </style>
-</head>
-<body>
-    <nav class="navbar navbar-expand-lg navbar-dark">
-        <div class="container">
-            <a class="navbar-brand" href="{{ url_for('dashboard') }}">
-                <i class="fas fa-shield-alt"></i> Secure Chat
-            </a>
-            
-            {% if session.username %}
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" 
-                    aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto align-items-center">
-                    <li class="nav-item me-3 d-flex align-items-center">
-                        <span class="status-indicator online me-2"></span>
-                        <span class="text-light">{{ session.username }}</span>
-                    </li>
-                    <li class="nav-item me-3">
-                        <button class="theme-toggle" id="themeToggle" title="Toggle theme">
-                            <i class="fas fa-moon"></i>
-                        </button>
-                    </li>
-                    <li class="nav-item">
-                        <a class="btn btn-outline-light" href="{{ url_for('logout') }}">
-                            <i class="fas fa-sign-out-alt me-1"></i> Logout
-                        </a>
-                    </li>
-                </ul>
+{% extends "base.html" %}
+
+{% block title %}Chat with {{ recipient }} - Secure Chat{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5>
+                    <i class="fas fa-comments"></i> 
+                    Chat with {{ recipient }}
+                    <span id="recipient-status" class="user-status ms-2">
+                        <i class="fas fa-circle"></i> Status Unknown
+                    </span>
+                </h5>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-sm btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Back
+                </a>
             </div>
-            {% endif %}
+            
+            <div id="chat-messages" class="chat-container">
+                <!-- Messages will be loaded here -->
+                <div id="message-list"></div>
+            </div>
+            
+            <div class="card-footer">
+                <form id="message-form" class="d-flex gap-2">
+                    <input type="text" id="message-input" class="form-control" 
+                           placeholder="Type your message... (max 150 chars for RSA)" 
+                           maxlength="150" required>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-paper-plane"></i> Send
+                    </button>
+                </form>
+                <small class="text-muted">Messages are encrypted end-to-end with RSA</small>
+            </div>
         </div>
-    </nav>
-
-    <div class="container mt-4">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ 'danger' if category == 'error' else 'success' if category == 'success' else 'info' }} alert-dismissible fade show" role="alert">
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    </div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
-
-        {% block content %}{% endblock %}
     </div>
-
-    <!-- Footer -->
-    <footer class="mt-auto py-4 text-center text-muted">
-        <div class="container">
-            <p class="mb-0"> 2023 Secure Chat. All rights reserved.</p>
-            <small>End-to-end encrypted messaging for everyone</small>
-        </div>
-    </footer>
-
-    <!-- JavaScript Libraries -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
     
-    <!-- Custom Scripts -->
-    <script>
-        // Theme Toggle Functionality
-        document.addEventListener('DOMContentLoaded', function() {
-            const themeToggle = document.getElementById('themeToggle');
-            const themeIcon = themeToggle?.querySelector('i');
-            const html = document.documentElement;
-            
-            // Check for saved theme preference or use system preference
-            const savedTheme = localStorage.getItem('theme') || 
-                             (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-            
-            // Apply the saved theme
-            if (savedTheme === 'dark') {
-                html.setAttribute('data-bs-theme', 'dark');
-                if (themeIcon) themeIcon.className = 'fas fa-sun';
-            }
-            
-            // Toggle theme on button click
-            if (themeToggle) {
-                themeToggle.addEventListener('click', function() {
-                    const currentTheme = html.getAttribute('data-bs-theme');
-                    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-                    
-                    // Update theme
-                    html.setAttribute('data-bs-theme', newTheme);
-                    localStorage.setItem('theme', newTheme);
-                    
-                    // Update icon
-                    if (themeIcon) {
-                        themeIcon.className = newTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
-                    }
-                    
-                    // Dispatch event for other components to react to theme changes
-                    document.dispatchEvent(new CustomEvent('themeChange', { detail: { theme: newTheme } }));
-                });
-            }
-            
-            // Initialize tooltips
-            const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-            tooltipTriggerList.map(function (tooltipTriggerEl) {
-                return new bootstrap.Tooltip(tooltipTriggerEl);
-            });
-            
-            // Initialize popovers
-            const popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
-            popoverTriggerList.map(function (popoverTriggerEl) {
-                return new bootstrap.Popover(popoverTriggerEl);
-            });
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h6><i class="fas fa-shield-alt"></i> Encryption Status</h6>
+            </div>
+            <div class="card-body">
+                <div id="encryption-log" style="height: 400px; overflow-y: auto;">
+                    <div class="encryption-log">
+                        <i class="fas fa-info-circle"></i> Ready for secure messaging
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6><i class="fas fa-chart-line"></i> Session Stats</h6>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-6">
+                        <div class="h5 text-success" id="messages-sent">0</div>
+                        <small>Sent</small>
+                    </div>
+                    <div class="col-6">
+                        <div class="h5 text-info" id="messages-received">0</div>
+                        <small>Received</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const socket = io();
+    const currentUser = '{{ current_user }}';
+    const recipient = '{{ recipient }}';
+    let messagesSent = 0;
+    let messagesReceived = 0;
+    
+    // DOM elements
+    const messageForm = document.getElementById('message-form');
+    const messageInput = document.getElementById('message-input');
+    const messageList = document.getElementById('message-list');
+    const encryptionLog = document.getElementById('encryption-log');
+    const chatContainer = document.getElementById('chat-messages');
+    
+    // Initialize
+    document.addEventListener('DOMContentLoaded', function() {
+        loadChatHistory();
+        messageInput.focus();
+    });
+    
+    // Handle message form submission
+    messageForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const message = messageInput.value.trim();
+        
+        if (message) {
+            sendMessage(message);
+            messageInput.value = '';
+        }
+    });
+    
+    function sendMessage(message) {
+        // Add message to UI immediately (optimistic update)
+        addMessageToUI(currentUser, message, 'sent', new Date().toISOString(), true);
+        
+        // Send to server for encryption and delivery
+        socket.emit('send_message', {
+            recipient: recipient,
+            message: message
         });
         
-        // Auto-hide alerts after 5 seconds
-        document.addEventListener('DOMContentLoaded', function() {
-            const alerts = document.querySelectorAll('.alert');
-            alerts.forEach(alert => {
-                setTimeout(() => {
-                    const bsAlert = new bootstrap.Alert(alert);
-                    bsAlert.close();
-                }, 5000);
-            });
-        });
+        addEncryptionLog('🔒 Encrypting message with ' + recipient + '\'s public key...', 'info');
+    }
+    
+    function addMessageToUI(sender, content, type, timestamp, isPlaintext = false, messageId = null) {
+        messageId = messageId || generateMessageId();
+        const messageElement = document.createElement('div');
+        messageElement.className = `message ${type}`;
+        messageElement.setAttribute('data-message-id', messageId);
         
-        // Scroll to bottom of chat containers
-        function scrollToBottom(elementId) {
-            const element = document.getElementById(elementId);
-            if (element) {
-                element.scrollTop = element.scrollHeight;
-            }
+        const senderElement = document.createElement('div');
+        senderElement.className = 'message-sender';
+        senderElement.textContent = sender + ':';
+        
+        const contentElement = document.createElement('div');
+        contentElement.className = 'message-content';
+        contentElement.textContent = isPlaintext ? content : '🔒 Encrypted message (click to decrypt)';
+        
+        if (!isPlaintext) {
+            contentElement.style.cursor = 'pointer';
+            contentElement.onclick = () => decryptMessage(messageElement, content, messageId);
+            contentElement.innerHTML += ' <i class="fas fa-lock"></i>';
         }
         
-        // Make functions available globally
-        window.appHelpers = {
-            scrollToBottom
-        };
-    </script>
+        const timeElement = document.createElement('div');
+        timeElement.className = 'message-time';
+        timeElement.textContent = formatTime(timestamp);
+        
+        messageElement.appendChild(senderElement);
+        messageElement.appendChild(contentElement);
+        messageElement.appendChild(timeElement);
+        
+        chatContainer.appendChild(messageElement);
+        scrollToBottom();
+        
+        return messageId; // Return the message ID for tracking
+    }
     
-    <!-- Page-specific scripts -->
-    {% block scripts %}{% endblock %}
+    function decryptMessage(messageElement, encryptedContent, messageId) {
+        const contentDiv = messageElement.querySelector('.message-content');
+        if (contentDiv.classList.contains('decrypting')) {
+            return; // Already decrypting
+        }
+        
+        contentDiv.classList.add('decrypting');
+        contentDiv.innerHTML = '🔓 Decrypting... <i class="fas fa-spinner fa-spin"></i>';
+        
+        // Request decryption from server
+        socket.emit('decrypt_message', {
+            encrypted_content: encryptedContent,
+            message_id: messageId
+        });
+    }
     
-    <!-- Socket.IO initialization -->
-    {% if session.username %}
-    <script>
-        const socket = io();
+    function addEncryptionLog(message, type = 'info') {
+        const logDiv = document.createElement('div');
+        logDiv.className = `encryption-log alert-${type}`;
+        logDiv.innerHTML = `
+            <div class="d-flex justify-content-between">
+                <span>${message}</span>
+                <small>${new Date().toLocaleTimeString()}</small>
+            </div>
+        `;
         
-        // Handle connection status
-        socket.on('connect', function() {
-            console.log('Connected to WebSocket server');
-            // Notify server about the connection
-            socket.emit('user_connected', { username: '{{ session.username }}' });
-        });
+        encryptionLog.appendChild(logDiv);
+        encryptionLog.scrollTop = encryptionLog.scrollHeight;
+    }
+    
+    function updateStats() {
+        document.getElementById('messages-sent').textContent = messagesSent;
+        document.getElementById('messages-received').textContent = messagesReceived;
+    }
+    
+    function scrollToBottom() {
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+    
+    function formatTime(timestamp) {
+        return new Date(timestamp).toLocaleTimeString();
+    }
+    
+    function generateMessageId() {
+        return 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    }
+    
+    function loadChatHistory() {
+        try {
+            // Safely parse messages from template data
+            const messages = JSON.parse('{{ messages | tojson | safe }}') || [];
+            
+            if (!Array.isArray(messages)) {
+                console.error('Invalid messages format:', messages);
+                addEncryptionLog('❌ Failed to load chat history: Invalid format', 'danger');
+                return;
+            }
+            
+            // Process messages in reverse chronological order
+            messages.slice().reverse().forEach(msg => {
+                if (!msg || typeof msg !== 'object') return;
+                
+                const isSent = (msg.sender === currentUser);
+                addMessageToUI(
+                    msg.sender || 'Unknown', 
+                    msg.encrypted_content || '', 
+                    isSent ? 'sent' : 'received', 
+                    msg.timestamp || new Date().toISOString(),
+                    false // Always encrypted in history
+                );
+            });
+            
+            // Scroll to bottom after loading messages
+            scrollToBottomDelayed();
+        } catch (error) {
+            console.error('Error loading chat history:', error);
+            addEncryptionLog('❌ Failed to load chat history', 'danger');
+        }
+    }
+    
+    // Socket event handlers
+    socket.on('encryption_status', function(data) {
+        addEncryptionLog(
+            `✅ Message encrypted successfully (${data.original_length} → ${data.encrypted_length} chars)`, 
+            'success'
+        );
+    });
+    
+    socket.on('message_sent', function(data) {
+        messagesSent++;
+        updateStats();
+        addEncryptionLog('📤 Encrypted message sent to ' + data.recipient, 'success');
+    });
+    
+    socket.on('new_message', function(data) {
+        messagesReceived++;
+        updateStats();
         
-        // Handle disconnection
-        socket.on('disconnect', function() {
-            console.log('Disconnected from WebSocket server');
-        });
+        const messageId = data.message_id || generateMessageId();
+        addMessageToUI(
+            data.sender, 
+            data.encrypted_content, 
+            'received', 
+            data.timestamp,
+            false,
+            messageId
+        );
         
-        // Handle errors
-        socket.on('connect_error', function(error) {
-            console.error('Connection Error:', error);
-        });
-    </script>
-    {% endif %}
-</body>
-</html>
+        addEncryptionLog('📥 Encrypted message received from ' + data.sender, 'info');
+    });
+    
+    socket.on('decryption_status', function(data) {
+        addEncryptionLog(
+            `🔓 Message decrypted successfully (${data.encrypted_length} → ${data.decrypted_length} chars)`, 
+            'success'
+        );
+    });
+    
+    socket.on('message_decrypted', function(data) {
+        // Find the message element and update it
+        const messageElement = document.querySelector(`[data-message-id="${data.message_id}"]`);
+        if (messageElement) {
+            const contentDiv = messageElement.querySelector('.message-content');
+            contentDiv.textContent = data.content;
+            contentDiv.style.cursor = 'default';
+            contentDiv.classList.remove('decrypting');
+            
+            // Remove lock icon and spinner
+            const icons = messageElement.querySelectorAll('.fa-lock, .fa-spinner');
+            icons.forEach(icon => icon.remove());
+        }
+    });
+    
+    socket.on('user_status', function(data) {
+        if (data.username === recipient) {
+            const statusElement = document.getElementById('recipient-status');
+            statusElement.innerHTML = `<i class="fas fa-circle ${data.status}"></i> ${data.status}`;
+        }
+    });
+    
+    socket.on('error', function(data) {
+        addEncryptionLog('❌ Error: ' + data.message, 'danger');
+        console.error('Socket error:', data.message);
+    });
+    
+    // Handle connection events
+    socket.on('connect', function() {
+        addEncryptionLog('🔌 Connected to secure server', 'success');
+    });
+    
+    socket.on('disconnect', function() {
+        addEncryptionLog('🔌 Disconnected from server', 'warning');
+    });
+</script>
+{% endblock %}
