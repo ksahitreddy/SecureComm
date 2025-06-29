@@ -6,12 +6,13 @@ Fixed: JSON serialization error with MongoDB ObjectId
 """
 
 from functools import wraps
-from flask import Flask, render_template, request, jsonify, redirect, url_for, session, flash
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session, flash, send_from_directory
 from flask_socketio import SocketIO, emit, join_room, leave_room, rooms
 import pymongo
 import bcrypt
 import os
 from datetime import datetime, timedelta
+from werkzeug.utils import secure_filename
 import logging
 import json
 import base64
@@ -27,13 +28,24 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC3WUC1FCsePbuQf/9lRrhPmKbebzuxgLe4Or6we2NZGxsnFYBECnZzv2ZNRglZsHh49odqHWQjQ0mnUvUfhr6FJY6j2h23wpwqGJ1/PT6svDE5ZhfmPBNE4rnnL9f1xLe5hNyfI3JxjM+XhNhav0qClyoNm0NwND3gVeY+wdwRRfHNOsU8l3w4vvQxw4ooSRPpv//mPNnjXAchMjKkhB4O7dtwVsEw8brzQQ6S/gx5d/c/PXEXJ5kyIv797Rqbe8MC5hr22dWeh93VG80DmPCP9Pe9We+Anc299qXSric0Mw82A6wG6Rfi7mbT2zEaByPFe4wBzyn6hQQMfmw3Ws+9AgMBAAECggEAPSrhk4eu+t/Ne1+4bKkzRBrBUOP7HjS7FhNDGs2PT2LjpB5gNFLpQaRRFOaQqANfrbtRYe18Qudn4xKiBGqHlRP6il9yGqQqRUEBCjn8dtQx99w/jOft5cVeD+q+OZfvU00n7U9+FrPLbdk79MpsqTSVKwTpcr17ByShM76pFHmW2o3AFb2euvQdagnQBcipYpjHge2APXQCMl3PtTy5yEzAinFDbw8JkYVzzq99YuIV+g4R3uIQG7hAAtxRBgVCvmFrQZKOphAXC9YhBUaVMbTxR/+Ufxfe22SVyOH4+9JkZj1xEMfPJdujlqVOaYXeHImp2eQlgzfEnGXI117mYQKBgQC47fUvnLZl+hKQdM0i5wk9a/gb3+Mo2ewOhceycpR9K1JlfktY/FLMKS7za3mUQfrVA0+Iw9L6C+SEfZ2YV7NSuJhnIToJE4MRvg7HRmC5/ZzlaQZfYDALcRUlQg+1hHC3obCzA/f+VAMc7glaXGMP65ILWGQS5kLvkmzQJXZCfwKBgQD9z8MqPOWf1tqQiLQnkGR4+HaPgLfl7QFx1cW2BQQnVx6WvUmI/HvMl+AGH7RJipSKiLD54KHpRK6+wAyVQJ5HOF0jjDZq7oLRMieRXHaRhZR0KBqnF2Ki4faQbL8E9ijQf/nmlE6tTZk3gvzGLMbtUx+ppcnkIU9iFJie0dNXwwKBgAPHQNovLn7Y5CY1bLeI1uR9Xz1ajq6X/T2yuAjKVIRWLUHLmciAp0Rqlv38NSi1TGWrwqU9swLO2WVnl5+0MwK+qMZ6pE/pKSVkp7KkmndSWjFJuwqZ0YF6Vv9C4UVJJnBqCk0uCJQWrVWa+2/wMUny+zHmJW1JbRat/DEogskLAoGAIRvKBKd++LPJPRNoFMUkJhebN6r90jNxfcz6Bn1vBka6CcXVYtY0vAKPyZy3IuS97bhZBa+Ez24TMXTR72JHg1jZ5Xoz2w0T6YAWY0LhgKghLmnQ2D0Xs9GwHTTiUh5eQpx/F9H+1WKK+w/OM3fB11GBjtq+lFC4Dz5KjmUmoYsCgYEAnEtKtkg80hOs2CcrNm83J+OeYw/3K/ijhcCDqPZ0r4r98mzXEmCkcCXl0gWNzyGcbTAgv+zDUyygNOlDoW9DeqkIZ8JKME+nWAfmYOm7lDj89Q1/ThjcHSCI7eDnd1bqwUlSjaw1EhtfuvZn4PfWQmGMI9O1bDbBP0fn3Kx4KQs=')
+app.secret_key = os.environ.get('SECRET_KEY')
+
+# File upload configuration
+UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
+ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'zip'}
+MAX_CONTENT_LENGTH = 10 * 1024 * 1024  # 10MB max file size
+
+# Ensure upload folder exists
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
 
 # Initialize SocketIO with CORS support
 socketio = SocketIO(app, cors_allowed_origins="*", logger=True, engineio_logger=True)
 
 # MongoDB Configuration
-MONGO_URI = 'mongodb+srv://admins:4postr0phe@stock.sxr4y.mongodb.net/?retryWrites=true&w=majority&appName=Stock'
+MONGO_URI = os.environ.get('MONGO_URI')
 DATABASE_NAME = 'securecomm_db'
 USERS_COLLECTION = 'users'
 MESSAGES_COLLECTION = 'messages'
@@ -935,6 +947,66 @@ def clear_chat():
     except Exception as e:
         logger.error(f"Error clearing chat: {e}", exc_info=True)
         return jsonify({'success': False, 'message': 'Failed to clear chat'}), 500
+
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+@app.route('/uploads/<path:filename>')
+@login_required
+def download_file(filename):
+    """Serve uploaded files"""
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
+
+@app.route('/api/upload', methods=['POST'])
+@login_required
+def upload_file():
+    """Handle file uploads"""
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'message': 'No file part'}), 400
+        
+    file = request.files['file']
+    recipient = request.form.get('recipient')
+    
+    if not recipient:
+        return jsonify({'success': False, 'message': 'Recipient is required'}), 400
+        
+    if file.filename == '':
+        return jsonify({'success': False, 'message': 'No selected file'}), 400
+        
+    if file and allowed_file(file.filename):
+        try:
+            # Create a secure filename
+            filename = secure_filename(file.filename)
+            # Add timestamp to make filename unique
+            timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S')
+            filename = f"{timestamp}_{filename}"
+            
+            # Save file
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(filepath)
+            
+            # Get file size
+            file_size = os.path.getsize(filepath)
+            
+            # Generate download URL
+            download_url = url_for('download_file', filename=filename, _external=True)
+            
+            return jsonify({
+                'success': True,
+                'filename': file.filename,
+                'size': file_size,
+                'download_url': download_url
+            })
+            
+        except Exception as e:
+            logger.error(f"Error uploading file: {e}", exc_info=True)
+            return jsonify({'success': False, 'message': str(e)}), 500
+    else:
+        return jsonify({
+            'success': False, 
+            'message': 'File type not allowed. Allowed types: ' + ', '.join(ALLOWED_EXTENSIONS)
+        }), 400
 
 @app.route('/api/users/search', methods=['GET'])
 @login_required
