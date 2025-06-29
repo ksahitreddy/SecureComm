@@ -5,6 +5,7 @@ Builds on the existing Flask authentication system
 Fixed: JSON serialization error with MongoDB ObjectId
 """
 
+from functools import wraps
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session, flash
 from flask_socketio import SocketIO, emit, join_room, leave_room, rooms
 import pymongo
@@ -31,7 +32,7 @@ app.secret_key = os.environ.get('SECRET_KEY')
 socketio = SocketIO(app, cors_allowed_origins="*", logger=True, engineio_logger=True)
 
 # MongoDB Configuration
-MONGO_URI = os.environ.get('MONGO_URI')
+MONGO_URI = os.environ.get('MONGO_URI', 'mongodb://localhost:27017/')
 DATABASE_NAME = 'securecomm_db'
 USERS_COLLECTION = 'users'
 MESSAGES_COLLECTION = 'messages'
@@ -348,12 +349,24 @@ class MongoDBAuth:
         except Exception as e:
             logger.error(f"Get messages error: {e}")
 
+# Login required decorator
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'username' not in session:
+            flash('Please log in to access this page', 'warning')
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
 # Initialize MongoDB connection
 mongo_auth = MongoDBAuth(MONGO_URI, DATABASE_NAME)
 
 # Store active socket connections and online users
 active_connections = {}  # username: sid
 online_users = set()  # Set of usernames that are currently online
+
+# Removed duplicate login_required decorator as it's already defined in auth.py
 
 @app.route('/')
 def index():
@@ -426,12 +439,9 @@ def register():
     return render_template('register.html')
 
 @app.route('/dashboard')
+@login_required
 def dashboard():
     """Dashboard page - requires authentication"""
-    if 'username' not in session:
-        flash('Please login to access this page', 'error')
-        return redirect(url_for('login'))
-    
     username = session['username']
     user_info = mongo_auth.get_user(username)
     online_users = mongo_auth.get_online_users()
@@ -465,11 +475,78 @@ def chat(recipient):
                          recipient=recipient,
                          messages=messages)
 
+@app.route('/settings', methods=['GET', 'POST'])
+@login_required
+def user_settings():
+    username = session.get('username')
+    if not username:
+        return redirect(url_for('login'))
+    
+    # Get user data from database
+    user = mongo_auth.get_user(username)
+    if not user:
+        flash('User not found', 'danger')
+        return redirect(url_for('login'))
+        
+    if request.method == 'POST':
+        # Update email if provided and different
+        new_email = request.form.get('email')
+        if new_email and new_email != user.get('email', ''):
+            if not re.match(r'[^@]+@[^@]+\.[^@]+', new_email):
+                flash('Invalid email address', 'danger')
+            else:
+                mongo_auth.users.update_one(
+                    {'username': username},
+                    {'$set': {'email': new_email}}
+                )
+                flash('Email updated successfully', 'success')
+                # Update user data
+                user['email'] = new_email
+        
+        # Update password if provided
+        current_password = request.form.get('current_password')
+        new_password = request.form.get('new_password')
+        confirm_password = request.form.get('confirm_password')
+        
+        if current_password and new_password and confirm_password:
+            # Get user with password for verification
+            user_with_password = mongo_auth.users.find_one(
+                {'username': username},
+                {'password': 1}
+            )
+            
+            if not user_with_password or 'password' not in user_with_password:
+                flash('Error: Could not verify current password', 'danger')
+            elif not bcrypt.checkpw(current_password.encode('utf-8'), user_with_password['password']):
+                flash('Current password is incorrect', 'danger')
+            elif new_password != confirm_password:
+                flash('New passwords do not match', 'danger')
+            elif len(new_password) < 8:
+                flash('Password must be at least 8 characters long', 'danger')
+            else:
+                hashed = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt())
+                mongo_auth.users.update_one(
+                    {'username': username},
+                    {'$set': {'password': hashed}}
+                )
+                flash('Password updated successfully', 'success')
+        
+        # Refresh user data
+        user = mongo_auth.get_user(username)
+        
+    # Prepare user data for template (remove sensitive info)
+    user_data = {
+        'username': user.get('username'),
+        'email': user.get('email', 'Not set'),
+        'created_at': user.get('created_at', datetime.utcnow())
+    }
+        
+    return render_template('settings.html', user=user_data)
+
 @app.route('/logout')
+@login_required
 def logout():
-    """Logout user"""
-    if 'username' in session:
-        mongo_auth.set_user_offline(session['username'])
+    mongo_auth.set_user_offline(session['username'])
     session.clear()
     flash('You have been logged out', 'info')
     return redirect(url_for('login'))
