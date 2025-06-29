@@ -49,6 +49,24 @@
                 </div>
             </div>
 
+            <!-- Find Users Card -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-search me-2"></i>Find Users</h5>
+                </div>
+                <div class="card-body">
+                    <div class="input-group mb-3">
+                        <input type="text" id="user-search" class="form-control" placeholder="Search users...">
+                        <button class="btn btn-primary" type="button" id="search-users-btn">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                    <div id="search-results" class="list-group list-group-flush" style="max-height: 200px; overflow-y: auto;">
+                        <!-- Search results will appear here -->
+                    </div>
+                </div>
+            </div>
+
             <!-- Security Status Card -->
             <div class="card mt-4">
                 <div class="card-header">
@@ -288,6 +306,10 @@
 
 {% block scripts %}
 <script>
+    // Global variables
+    const currentUser = '{{ user.username }}';
+    let socket;
+    
     document.addEventListener('DOMContentLoaded', function() {
         // Initialize tooltips
         const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
@@ -302,8 +324,7 @@
         });
         
         // Initialize socket connection
-        const socket = io();
-        const currentUser = '{{ user.username }}';
+        socket = io();
         
         // Handle initial list of online users
         socket.on('online_users', function(data) {
@@ -407,7 +428,9 @@
         }
         
         // Request the current list of online users
-        socket.emit('get_online_users');
+        if (socket) {
+            socket.emit('get_online_users');
+        }
         
         // Update stats (mock data)
         document.getElementById('total-messages').textContent = Math.floor(Math.random() * 1000);
@@ -425,6 +448,90 @@
                     });
                     tooltip.show();
                     setTimeout(() => tooltip.hide(), 1000);
+                });
+            });
+        }
+    });
+
+    // User search functionality
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchInput = document.getElementById('user-search');
+        const searchButton = document.getElementById('search-users-btn');
+        const searchResults = document.getElementById('search-results');
+        
+        // Handle search on button click
+        searchButton.addEventListener('click', performSearch);
+        
+        // Handle search on Enter key
+        searchInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                performSearch();
+            }
+        });
+        
+        function performSearch() {
+            const query = searchInput.value.trim();
+            if (!query) {
+                showSearchResults([]);
+                return;
+            }
+            
+            // Show loading state
+            searchResults.innerHTML = '<div class="text-center p-3"><div class="spinner-border spinner-border-sm" role="status"></div> Searching...</div>';
+            
+            // Send search request to server
+            fetch(`/api/users/search?q=${encodeURIComponent(query)}`, {
+                headers: {
+                    'Accept': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showSearchResults(data.users);
+                } else {
+                    throw new Error(data.message || 'Search failed');
+                }
+            })
+            .catch(error => {
+                console.error('Search error:', error);
+                searchResults.innerHTML = `<div class="text-danger p-2">Error: ${error.message || 'Failed to search users'}</div>`;
+            });
+        }
+        
+        function showSearchResults(users) {
+            if (!users || users.length === 0) {
+                searchResults.innerHTML = '<div class="text-muted p-2">No users found</div>';
+                return;
+            }
+            
+            searchResults.innerHTML = users.map(user => `
+                <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center">
+                        <div class="position-relative me-2">
+                            <div class="avatar-sm">
+                                <div class="avatar-title bg-light rounded-circle text-primary">
+                                    ${user.username[0].toUpperCase()}
+                                </div>
+                            </div>
+                            <span class="position-absolute bottom-0 end-0 bg-${user.is_online ? 'success' : 'secondary'} border border-2 border-white rounded-circle" style="width: 10px; height: 10px;"></span>
+                        </div>
+                        <div>
+                            <h6 class="mb-0">${user.username}</h6>
+                            <small class="text-muted">${user.is_online ? 'Online' : 'Offline'}</small>
+                        </div>
+                    </div>
+                    <button class="btn btn-sm btn-outline-primary message-user" data-username="${user.username}" ${user.username === currentUser ? 'disabled' : ''}>
+                        <i class="fas fa-paper-plane me-1"></i> Message
+                    </button>
+                </div>
+            `).join('');
+            
+            // Add event listeners to message buttons
+            document.querySelectorAll('.message-user').forEach(button => {
+                button.addEventListener('click', function() {
+                    const recipient = this.getAttribute('data-username');
+                    window.location.href = `/chat/${recipient}`;
                 });
             });
         }
