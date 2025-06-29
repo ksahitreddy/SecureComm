@@ -20,19 +20,20 @@ from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.backends import default_backend
 import secrets
+import re
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-change-this')
+app.secret_key = os.environ.get('SECRET_KEY', 'MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC3WUC1FCsePbuQf/9lRrhPmKbebzuxgLe4Or6we2NZGxsnFYBECnZzv2ZNRglZsHh49odqHWQjQ0mnUvUfhr6FJY6j2h23wpwqGJ1/PT6svDE5ZhfmPBNE4rnnL9f1xLe5hNyfI3JxjM+XhNhav0qClyoNm0NwND3gVeY+wdwRRfHNOsU8l3w4vvQxw4ooSRPpv//mPNnjXAchMjKkhB4O7dtwVsEw8brzQQ6S/gx5d/c/PXEXJ5kyIv797Rqbe8MC5hr22dWeh93VG80DmPCP9Pe9We+Anc299qXSric0Mw82A6wG6Rfi7mbT2zEaByPFe4wBzyn6hQQMfmw3Ws+9AgMBAAECggEAPSrhk4eu+t/Ne1+4bKkzRBrBUOP7HjS7FhNDGs2PT2LjpB5gNFLpQaRRFOaQqANfrbtRYe18Qudn4xKiBGqHlRP6il9yGqQqRUEBCjn8dtQx99w/jOft5cVeD+q+OZfvU00n7U9+FrPLbdk79MpsqTSVKwTpcr17ByShM76pFHmW2o3AFb2euvQdagnQBcipYpjHge2APXQCMl3PtTy5yEzAinFDbw8JkYVzzq99YuIV+g4R3uIQG7hAAtxRBgVCvmFrQZKOphAXC9YhBUaVMbTxR/+Ufxfe22SVyOH4+9JkZj1xEMfPJdujlqVOaYXeHImp2eQlgzfEnGXI117mYQKBgQC47fUvnLZl+hKQdM0i5wk9a/gb3+Mo2ewOhceycpR9K1JlfktY/FLMKS7za3mUQfrVA0+Iw9L6C+SEfZ2YV7NSuJhnIToJE4MRvg7HRmC5/ZzlaQZfYDALcRUlQg+1hHC3obCzA/f+VAMc7glaXGMP65ILWGQS5kLvkmzQJXZCfwKBgQD9z8MqPOWf1tqQiLQnkGR4+HaPgLfl7QFx1cW2BQQnVx6WvUmI/HvMl+AGH7RJipSKiLD54KHpRK6+wAyVQJ5HOF0jjDZq7oLRMieRXHaRhZR0KBqnF2Ki4faQbL8E9ijQf/nmlE6tTZk3gvzGLMbtUx+ppcnkIU9iFJie0dNXwwKBgAPHQNovLn7Y5CY1bLeI1uR9Xz1ajq6X/T2yuAjKVIRWLUHLmciAp0Rqlv38NSi1TGWrwqU9swLO2WVnl5+0MwK+qMZ6pE/pKSVkp7KkmndSWjFJuwqZ0YF6Vv9C4UVJJnBqCk0uCJQWrVWa+2/wMUny+zHmJW1JbRat/DEogskLAoGAIRvKBKd++LPJPRNoFMUkJhebN6r90jNxfcz6Bn1vBka6CcXVYtY0vAKPyZy3IuS97bhZBa+Ez24TMXTR72JHg1jZ5Xoz2w0T6YAWY0LhgKghLmnQ2D0Xs9GwHTTiUh5eQpx/F9H+1WKK+w/OM3fB11GBjtq+lFC4Dz5KjmUmoYsCgYEAnEtKtkg80hOs2CcrNm83J+OeYw/3K/ijhcCDqPZ0r4r98mzXEmCkcCXl0gWNzyGcbTAgv+zDUyygNOlDoW9DeqkIZ8JKME+nWAfmYOm7lDj89Q1/ThjcHSCI7eDnd1bqwUlSjaw1EhtfuvZn4PfWQmGMI9O1bDbBP0fn3Kx4KQs=')
 
 # Initialize SocketIO with CORS support
 socketio = SocketIO(app, cors_allowed_origins="*", logger=True, engineio_logger=True)
 
 # MongoDB Configuration
-MONGO_URI = os.environ.get('MONGO_URI', 'mongodb://localhost:27017/')
+MONGO_URI = 'mongodb+srv://admins:4postr0phe@stock.sxr4y.mongodb.net/?retryWrites=true&w=majority&appName=Stock'
 DATABASE_NAME = 'securecomm_db'
 USERS_COLLECTION = 'users'
 MESSAGES_COLLECTION = 'messages'
@@ -528,22 +529,24 @@ def chat(recipient):
 @app.route('/settings', methods=['GET', 'POST'])
 @login_required
 def user_settings():
-    if 'username' not in session:
-        return redirect(url_for('login'))
-    
     username = session['username']
-    user = mongo_auth.get_user(username)
-    
-    if not user:
-        flash('User not found', 'danger')
-        return redirect(url_for('login'))
     
     if request.method == 'POST':
-        # Update email if provided and different
+        # Get the user with password for verification
+        user_data = mongo_auth.users.find_one(
+            {"username": username, "is_active": True}
+        )
+        
+        if not user_data:
+            flash('User not found', 'danger')
+            return redirect(url_for('dashboard'))
+        
+        # Update email if provided
         new_email = request.form.get('email')
-        if new_email and new_email != user.get('email', ''):
-            if not re.match(r'[^@]+@[^@]+\.[^@]+', new_email):
-                flash('Invalid email address', 'danger')
+        if new_email and new_email != user_data.get('email'):
+            # Validate email format
+            if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', new_email):
+                flash('Invalid email format', 'danger')
                 return redirect(url_for('user_settings'))
                 
             mongo_auth.users.update_one(
@@ -558,7 +561,8 @@ def user_settings():
         confirm_password = request.form.get('confirm_password')
         
         if current_password and new_password and confirm_password:
-            if not bcrypt.checkpw(current_password.encode('utf-8'), user['password']):
+            # Verify current password
+            if not mongo_auth.verify_password(current_password, user_data['password']):
                 flash('Current password is incorrect', 'danger')
                 return redirect(url_for('user_settings'))
                 
@@ -570,18 +574,22 @@ def user_settings():
                 flash('Password must be at least 8 characters long', 'danger')
                 return redirect(url_for('user_settings'))
                 
-            hashed = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt())
+            # Update password
+            hashed = mongo_auth.hash_password(new_password)
             mongo_auth.users.update_one(
                 {'username': username},
                 {'$set': {'password': hashed}}
             )
             flash('Password updated successfully', 'success')
         
-        # Refresh user data
-        user = mongo_auth.get_user(username)
         return redirect(url_for('user_settings'))
     
-    # For GET request, render the settings page with current user data
+    # For GET request, get user data without password and render the settings page
+    user = mongo_auth.get_user(username)
+    if not user:
+        flash('User not found', 'danger')
+        return redirect(url_for('dashboard'))
+    
     return render_template('settings.html', user=user)
 
 @app.route('/logout')
