@@ -6,17 +6,31 @@
 <div class="row">
     <div class="col-md-8">
         <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5>
-                    <i class="fas fa-comments"></i> 
-                    Chat with {{ recipient }}
-                    <span id="recipient-status" class="user-status ms-2">
-                        <i class="fas fa-circle"></i> Status Unknown
-                    </span>
-                </h5>
-                <a href="{{ url_for('dashboard') }}" class="btn btn-sm btn-secondary">
-                    <i class="fas fa-arrow-left"></i> Back
-                </a>
+            <div class="chat-header d-flex justify-content-between align-items-center p-3 border-bottom">
+                <div class="d-flex align-items-center">
+                    <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary btn-sm me-2">
+                        <i class="fas fa-arrow-left"></i>
+                    </a>
+                    <div>
+                        <h5 class="mb-0">{{ recipient }}</h5>
+                        <small class="text-muted" id="recipient-status">
+                            <i class="fas fa-circle text-muted me-1"></i> offline
+                        </small>
+                    </div>
+                </div>
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary btn-sm" type="button" id="chatMenuButton" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="fas fa-ellipsis-v"></i>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="chatMenuButton">
+                        <li><a class="dropdown-item" href="#"><i class="fas fa-search me-2"></i>Search</a></li>
+                        <li><a class="dropdown-item" href="#"><i class="fas fa-bell me-2"></i>Mute Notifications</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item text-danger" href="#" id="clearChatBtn">
+                            <i class="fas fa-trash me-2"></i>Clear Chat
+                        </a></li>
+                    </ul>
+                </div>
             </div>
             
             <div id="chat-messages" class="chat-container">
@@ -76,7 +90,7 @@
 {% block scripts %}
 <script>
     const socket = io();
-    const currentUser = '{{ current_user }}';
+    const currentUser = '{{ user.username }}';
     const recipient = '{{ recipient }}';
     let messagesSent = 0;
     let messagesReceived = 0;
@@ -94,43 +108,66 @@
         messageInput.focus();
     });
     
-    // Handle message form submission
+    // Handle message sending
     messageForm.addEventListener('submit', function(e) {
         e.preventDefault();
         const message = messageInput.value.trim();
         
         if (message) {
             sendMessage(message);
-            messageInput.value = '';
         }
     });
     
+    // Handle message sending
     function sendMessage(message) {
-        // Add message to UI immediately (optimistic update)
-        addMessageToUI(currentUser, message, 'sent', new Date().toISOString(), true);
+        if (!message.trim()) return;
+        
+        const messageId = generateMessageId();
+        const timestamp = new Date().toISOString();
+        
+        // Add message to UI immediately with 'sending' status
+        const messageElement = addMessageToUI(
+            currentUser,
+            message,
+            'sent',
+            timestamp,
+            false,
+            messageId,
+            'sending'
+        );
         
         // Send to server for encryption and delivery
         socket.emit('send_message', {
             recipient: recipient,
-            message: message
+            message: message,
+            message_id: messageId
         });
         
+        // Clear input
+        messageInput.value = '';
+        messageInput.focus();
+        
         addEncryptionLog('🔒 Encrypting message with ' + recipient + '\'s public key...', 'info');
+        return messageElement;
     }
     
-    function addMessageToUI(sender, content, type, timestamp, isPlaintext = false, messageId = null) {
+    function addMessageToUI(sender, content, type, timestamp, isPlaintext = false, messageId = null, status = null) {
         messageId = messageId || generateMessageId();
+        const isSent = type === 'sent';
         const messageElement = document.createElement('div');
         messageElement.className = `message ${type}`;
         messageElement.setAttribute('data-message-id', messageId);
+        
+        const messageContent = document.createElement('div');
+        messageContent.className = 'message-content-wrapper';
         
         const senderElement = document.createElement('div');
         senderElement.className = 'message-sender';
         senderElement.textContent = sender + ':';
         
         const contentElement = document.createElement('div');
-        contentElement.className = 'message-content';
-        contentElement.textContent = isPlaintext ? content : '🔒 Encrypted message (click to decrypt)';
+        contentElement.className = 'message-text';
+        contentElement.textContent = isPlaintext ? content : 'Encrypted message (click to decrypt)';
         
         if (!isPlaintext) {
             contentElement.style.cursor = 'pointer';
@@ -138,34 +175,115 @@
             contentElement.innerHTML += ' <i class="fas fa-lock"></i>';
         }
         
+        // Add status indicator for sent messages
+        let statusElement = null;
+        if (isSent) {
+            statusElement = document.createElement('div');
+            statusElement.className = 'message-status';
+            
+            const statusIcon = document.createElement('i');
+            statusIcon.className = 'fas';
+            
+            // Set initial status
+            updateMessageStatus(statusElement, status || 'sending');
+            
+            statusElement.appendChild(document.createTextNode(' '));
+            statusElement.appendChild(document.createTextNode(status === 'delivered' ? 'Delivered' : 'Sending...'));
+        }
+        
         const timeElement = document.createElement('div');
         timeElement.className = 'message-time';
         timeElement.textContent = formatTime(timestamp);
         
-        messageElement.appendChild(senderElement);
-        messageElement.appendChild(contentElement);
-        messageElement.appendChild(timeElement);
+        messageContent.appendChild(senderElement);
+        messageContent.appendChild(contentElement);
+        
+        messageElement.appendChild(messageContent);
+        
+        const metaElement = document.createElement('div');
+        metaElement.className = 'message-meta';
+        metaElement.appendChild(timeElement);
+        
+        if (statusElement) {
+            metaElement.appendChild(document.createTextNode(' • '));
+            metaElement.appendChild(statusElement);
+        }
+        
+        messageElement.appendChild(metaElement);
         
         chatContainer.appendChild(messageElement);
         scrollToBottom();
         
-        return messageId; // Return the message ID for tracking
+        // Store reference to status element for updates
+        if (statusElement) {
+            messageElement._statusElement = statusElement;
+        }
+        
+        return messageElement; // Return the message element for status updates
+    }
+    
+    function updateMessageStatus(statusElement, status) {
+        if (!statusElement) return;
+        
+        const icon = statusElement.querySelector('i');
+        if (!icon) return;
+        
+        // Remove all status classes
+        icon.className = 'fas';
+        
+        // Add appropriate icon and class based on status
+        if (status === 'delivered') {
+            icon.classList.add('fa-check-circle', 'text-success');
+            statusElement.title = 'Delivered';
+        } else if (status === 'sent') {
+            icon.classList.add('fa-check', 'text-muted');
+            statusElement.title = 'Sent';
+        } else {
+            icon.classList.add('fa-clock', 'text-muted');
+            statusElement.title = 'Sending...';
+        }
+        
+        // Update status text if it exists
+        const textNode = Array.from(statusElement.childNodes).find(node => node.nodeType === Node.TEXT_NODE);
+        if (textNode) {
+            textNode.textContent = status === 'delivered' ? ' Delivered' : ' Sending...';
+        }
     }
     
     function decryptMessage(messageElement, encryptedContent, messageId) {
-        const contentDiv = messageElement.querySelector('.message-content');
-        if (contentDiv.classList.contains('decrypting')) {
-            return; // Already decrypting
-        }
+        const contentDiv = messageElement.querySelector('.message-text');
+        if (!contentDiv) return;
         
-        contentDiv.classList.add('decrypting');
-        contentDiv.innerHTML = '🔓 Decrypting... <i class="fas fa-spinner fa-spin"></i>';
+        // Show loading state
+        const originalContent = contentDiv.innerHTML;
+        contentDiv.innerHTML = 'Decrypting... <i class="fas fa-spinner fa-spin"></i>';
+        contentDiv.style.cursor = 'wait';
+        
+        // Add error handler for decryption timeout
+        const decryptTimeout = setTimeout(() => {
+            if (contentDiv.textContent.includes('Decrypting')) {
+                contentDiv.innerHTML = 'Decryption timed out. <a href="#" class="retry-decrypt" data-message-id="' + messageId + '">Retry</a>';
+                contentDiv.style.cursor = 'pointer';
+                
+                // Add retry handler
+                const retryLink = contentDiv.querySelector('.retry-decrypt');
+                if (retryLink) {
+                    retryLink.onclick = (e) => {
+                        e.preventDefault();
+                        decryptMessage(messageElement, encryptedContent, messageId);
+                    };
+                }
+            }
+        }, 10000); // 10 second timeout
         
         // Request decryption from server
         socket.emit('decrypt_message', {
             encrypted_content: encryptedContent,
             message_id: messageId
         });
+        
+        // Store the timeout ID so we can clear it if decryption succeeds
+        messageElement._decryptTimeout = decryptTimeout;
     }
     
     function addEncryptionLog(message, type = 'info') {
@@ -232,6 +350,57 @@
         }
     }
     
+    // Clear chat functionality
+    document.getElementById('clearChatBtn')?.addEventListener('click', async function(e) {
+        e.preventDefault();
+        
+        if (!confirm('Are you sure you want to clear all messages in this chat? This action cannot be undone.')) {
+            return;
+        }
+        
+        const clearBtn = this;
+        const originalHtml = clearBtn.innerHTML;
+        clearBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Clearing...';
+        clearBtn.disabled = true;
+        
+        try {
+            const response = await fetch('/api/chat/clear', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    other_user: '{{ recipient }}'
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                // Clear the chat UI
+                document.getElementById('chat-messages').innerHTML = '';
+                addEncryptionLog('Chat history has been cleared', 'info');
+            } else {
+                throw new Error(result.message || 'Failed to clear chat');
+            }
+        } catch (error) {
+            console.error('Error clearing chat:', error);
+            addEncryptionLog('❌ ' + (error.message || 'Failed to clear chat'), 'danger');
+        } finally {
+            clearBtn.innerHTML = originalHtml;
+            clearBtn.disabled = false;
+        }
+    });
+    
+    // Handle chat cleared event from server
+    socket.on('chat_cleared', function(data) {
+        if (data.with_user === '{{ recipient }}' || data.from_user === '{{ recipient }}') {
+            // Clear the chat UI if we're in the chat that was cleared
+            document.getElementById('chat-messages').innerHTML = '';
+            addEncryptionLog('Chat history has been cleared', 'info');
+        }
+    });
+    
     // Socket event handlers
     socket.on('encryption_status', function(data) {
         addEncryptionLog(
@@ -240,10 +409,15 @@
         );
     });
     
-    socket.on('message_sent', function(data) {
-        messagesSent++;
-        updateStats();
-        addEncryptionLog('📤 Encrypted message sent to ' + data.recipient, 'success');
+    socket.on('message_status', function(data) {
+        const messageElement = document.querySelector(`[data-message-id="${data.message_id}"]`);
+        if (messageElement && messageElement._statusElement) {
+            updateMessageStatus(messageElement._statusElement, data.status);
+            
+            if (data.status === 'delivered') {
+                addEncryptionLog(`✓ Message delivered to ${data.recipient}`, 'success');
+            }
+        }
     });
     
     socket.on('new_message', function(data) {
@@ -251,50 +425,97 @@
         updateStats();
         
         const messageId = data.message_id || generateMessageId();
-        addMessageToUI(
+        const messageElement = addMessageToUI(
             data.sender, 
             data.encrypted_content, 
             'received', 
-            data.timestamp,
+            data.timestamp || new Date().toISOString(),
             false,
             messageId
         );
         
-        addEncryptionLog('📥 Encrypted message received from ' + data.sender, 'info');
-    });
-    
-    socket.on('decryption_status', function(data) {
-        addEncryptionLog(
-            `🔓 Message decrypted successfully (${data.encrypted_length} → ${data.decrypted_length} chars)`, 
-            'success'
-        );
-    });
-    
-    socket.on('message_decrypted', function(data) {
-        // Find the message element and update it
-        const messageElement = document.querySelector(`[data-message-id="${data.message_id}"]`);
-        if (messageElement) {
-            const contentDiv = messageElement.querySelector('.message-content');
-            contentDiv.textContent = data.content;
-            contentDiv.style.cursor = 'default';
-            contentDiv.classList.remove('decrypting');
-            
-            // Remove lock icon and spinner
-            const icons = messageElement.querySelectorAll('.fa-lock, .fa-spinner');
-            icons.forEach(icon => icon.remove());
+        // Add click handler for decryption
+        const contentDiv = messageElement.querySelector('.message-text');
+        if (contentDiv && !data.isPlaintext) {
+            contentDiv.style.cursor = 'pointer';
+            contentDiv.onclick = () => decryptMessage(messageElement, data.encrypted_content, messageId);
         }
     });
     
     socket.on('user_status', function(data) {
         if (data.username === recipient) {
             const statusElement = document.getElementById('recipient-status');
-            statusElement.innerHTML = `<i class="fas fa-circle ${data.status}"></i> ${data.status}`;
+            if (statusElement) {
+                const statusClass = data.status === 'online' ? 'text-success' : 'text-muted';
+                statusElement.innerHTML = `<i class="fas fa-circle ${statusClass} me-1"></i> ${data.status}`;
+            }
+        }
+    });
+    
+    socket.on('decryption_error', function(data) {
+        const messageElement = document.querySelector(`[data-message-id="${data.message_id}"]`);
+        if (messageElement) {
+            const contentDiv = messageElement.querySelector('.message-text');
+            if (contentDiv) {
+                contentDiv.innerHTML = 'Failed to decrypt message. <a href="#" class="retry-decrypt" data-message-id="' + data.message_id + '">Retry</a>';
+                contentDiv.style.cursor = 'pointer';
+                
+                // Add retry handler
+                const retryLink = contentDiv.querySelector('.retry-decrypt');
+                if (retryLink) {
+                    retryLink.onclick = (e) => {
+                        e.preventDefault();
+                        const encryptedContent = messageElement.dataset.encryptedContent;
+                        if (encryptedContent) {
+                            decryptMessage(messageElement, encryptedContent, data.message_id);
+                        }
+                    };
+                }
+            }
+        }
+        
+        addEncryptionLog('❌ Decryption error: ' + (data.message || 'Unknown error'), 'danger');
+        console.error('Decryption error:', data);
+    });
+    
+    socket.on('message_decrypted', function(data) {
+        // Find the message element and update it
+        const messageElement = document.querySelector(`[data-message-id="${data.message_id}"]`);
+        if (messageElement) {
+            // Clear any pending timeout
+            if (messageElement._decryptTimeout) {
+                clearTimeout(messageElement._decryptTimeout);
+                delete messageElement._decryptTimeout;
+            }
+            
+            const contentDiv = messageElement.querySelector('.message-text');
+            if (contentDiv) {
+                contentDiv.textContent = data.content || 'Could not decrypt message';
+                contentDiv.style.cursor = 'default';
+                
+                // Remove any spinner or lock icons
+                contentDiv.innerHTML = contentDiv.textContent;
+                
+                // If decryption failed, add a retry button
+                if (!data.content) {
+                    const retryBtn = document.createElement('button');
+                    retryBtn.className = 'btn btn-sm btn-outline-secondary ms-2';
+                    retryBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Retry';
+                    retryBtn.onclick = () => {
+                        const encryptedContent = messageElement.dataset.encryptedContent;
+                        if (encryptedContent) {
+                            decryptMessage(messageElement, encryptedContent, data.message_id);
+                        }
+                    };
+                    contentDiv.appendChild(retryBtn);
+                }
+            }
         }
     });
     
     socket.on('error', function(data) {
-        addEncryptionLog('❌ Error: ' + data.message, 'danger');
-        console.error('Socket error:', data.message);
+        addEncryptionLog('❌ Error: ' + (data.message || 'Unknown error'), 'danger');
+        console.error('Socket error:', data);
     });
     
     // Handle connection events
