@@ -118,46 +118,54 @@
         addEncryptionLog('🔒 Encrypting message with ' + recipient + '\'s public key...', 'info');
     }
     
-    function addMessageToUI(sender, content, type, timestamp, isPlaintext = false) {
-        const messageDiv = document.createElement('div');
-        messageDiv.className = `message-bubble message-${type}`;
+    function addMessageToUI(sender, content, type, timestamp, isPlaintext = false, messageId = null) {
+        messageId = messageId || generateMessageId();
+        const messageElement = document.createElement('div');
+        messageElement.className = `message ${type}`;
+        messageElement.setAttribute('data-message-id', messageId);
         
-        const isSent = (sender === currentUser);
-        const displayContent = isPlaintext ? content : '[Encrypted Message - Click to decrypt]';
+        const senderElement = document.createElement('div');
+        senderElement.className = 'message-sender';
+        senderElement.textContent = sender + ':';
         
-        messageDiv.innerHTML = `
-            <div class="message-content" ${!isPlaintext && !isSent ? 'style="cursor: pointer;"' : ''}>
-                ${displayContent}
-            </div>
-            <div class="message-meta">
-                <small class="text-muted">
-                    ${isSent ? 'You' : sender} • ${formatTime(timestamp)}
-                    ${!isPlaintext ? '<i class="fas fa-lock ms-1"></i>' : ''}
-                </small>
-            </div>
-        `;
+        const contentElement = document.createElement('div');
+        contentElement.className = 'message-content';
+        contentElement.textContent = isPlaintext ? content : '🔒 Encrypted message (click to decrypt)';
         
-        // Add click handler for encrypted received messages
-        if (!isPlaintext && !isSent) {
-            messageDiv.addEventListener('click', function() {
-                decryptMessage(messageDiv, content, generateMessageId());
-            });
+        if (!isPlaintext) {
+            contentElement.style.cursor = 'pointer';
+            contentElement.onclick = () => decryptMessage(messageElement, content, messageId);
+            contentElement.innerHTML += ' <i class="fas fa-lock"></i>';
         }
         
-        messageList.appendChild(messageDiv);
+        const timeElement = document.createElement('div');
+        timeElement.className = 'message-time';
+        timeElement.textContent = formatTime(timestamp);
+        
+        messageElement.appendChild(senderElement);
+        messageElement.appendChild(contentElement);
+        messageElement.appendChild(timeElement);
+        
+        chatContainer.appendChild(messageElement);
         scrollToBottom();
+        
+        return messageId; // Return the message ID for tracking
     }
     
     function decryptMessage(messageElement, encryptedContent, messageId) {
-        addEncryptionLog('🔓 Decrypting message with your private key...', 'info');
+        const contentDiv = messageElement.querySelector('.message-content');
+        if (contentDiv.classList.contains('decrypting')) {
+            return; // Already decrypting
+        }
         
+        contentDiv.classList.add('decrypting');
+        contentDiv.innerHTML = '🔓 Decrypting... <i class="fas fa-spinner fa-spin"></i>';
+        
+        // Request decryption from server
         socket.emit('decrypt_message', {
             encrypted_content: encryptedContent,
             message_id: messageId
         });
-        
-        // Store reference for later update
-        messageElement.dataset.messageId = messageId;
     }
     
     function addEncryptionLog(message, type = 'info') {
@@ -225,12 +233,14 @@
         messagesReceived++;
         updateStats();
         
+        const messageId = data.message_id || generateMessageId();
         addMessageToUI(
             data.sender, 
             data.encrypted_content, 
             'received', 
             data.timestamp,
-            false
+            false,
+            messageId
         );
         
         addEncryptionLog('📥 Encrypted message received from ' + data.sender, 'info');
@@ -250,10 +260,11 @@
             const contentDiv = messageElement.querySelector('.message-content');
             contentDiv.textContent = data.content;
             contentDiv.style.cursor = 'default';
+            contentDiv.classList.remove('decrypting');
             
-            // Remove lock icon
-            const lockIcon = messageElement.querySelector('.fa-lock');
-            if (lockIcon) lockIcon.remove();
+            // Remove lock icon and spinner
+            const icons = messageElement.querySelectorAll('.fa-lock, .fa-spinner');
+            icons.forEach(icon => icon.remove());
         }
     });
     
