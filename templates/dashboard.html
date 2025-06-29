@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard - Secure Chat{% endblock %}
+{% block title %}Dashboard - SecureComm{% endblock %}
 
 {% block content %}
 <div class="container py-4">
@@ -19,7 +19,7 @@
                         <span class="position-absolute bottom-0 end-0 bg-success rounded-circle border border-3 border-white" style="width: 15px; height: 15px;"></span>
                     </div>
                     <h5 class="mb-1">{{ user.username }}</h5>
-                    <p class="text-muted mb-3">Secure Chat User</p>
+                    <p class="text-muted mb-3">SecureComm User</p>
                     <div class="d-flex justify-content-center gap-2">
                         <a href="{{ url_for('user_settings') }}" class="btn btn-outline-primary btn-sm">
                             <i class="fas fa-cog me-1"></i> Settings
@@ -44,7 +44,7 @@
                     <div id="no-users-message" class="text-center py-4 d-none">
                         <i class="fas fa-user-slash fa-2x mb-2 text-muted"></i>
                         <p class="text-body-secondary mb-0">No other users online</p>
-                        <p class="small text-body-secondary">Invite friends to join Secure Chat!</p>
+                        <p class="small text-body-secondary">Invite friends to join SecureComm!</p>
                     </div>
                 </div>
             </div>
@@ -275,7 +275,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <p>Invite your friends to join Secure Chat and enjoy private, encrypted messaging!</p>
+                <p>Invite your friends to join SecureComm and enjoy private, encrypted messaging!</p>
                 <div class="mb-3">
                     <label for="inviteEmail" class="form-label">Email address</label>
                     <input type="email" class="form-control" id="inviteEmail" placeholder="friend@example.com">
