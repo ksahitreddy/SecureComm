@@ -49,6 +49,24 @@
                 </div>
             </div>
 
+            <!-- Find Users Card -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-search me-2"></i>Find Users</h5>
+                </div>
+                <div class="card-body">
+                    <div class="input-group mb-3">
+                        <input type="text" id="user-search" class="form-control" placeholder="Search users...">
+                        <button class="btn btn-primary" type="button" id="search-users-btn">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                    <div id="search-results" class="list-group list-group-flush" style="max-height: 200px; overflow-y: auto;">
+                        <!-- Search results will appear here -->
+                    </div>
+                </div>
+            </div>
+
             <!-- Security Status Card -->
             <div class="card mt-4">
                 <div class="card-header">
@@ -169,24 +187,6 @@
                     <!-- Quick Actions -->
                     <h6 class="mb-3">Quick Actions</h6>
                     <div class="row g-3 mb-4">
-                        <div class="col-12">
-                            <div class="card">
-                                <div class="card-header">
-                                    <h5 class="mb-0"><i class="fas fa-search me-2"></i>Find People</h5>
-                                </div>
-                                <div class="card-body">
-                                    <div class="input-group mb-3">
-                                        <input type="text" id="people-search" class="form-control" placeholder="Search for people...">
-                                        <button class="btn btn-primary" type="button" id="search-people-btn">
-                                            <i class="fas fa-search"></i>
-                                        </button>
-                                    </div>
-                                    <div id="people-search-results" class="list-group list-group-flush" style="max-height: 200px; overflow-y: auto;">
-                                        <!-- Search results will appear here -->
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
                         <div class="col-6 col-md-3">
                             <a href="#" class="card bg-light-subtle border-0 text-center p-3 h-100 text-decoration-none text-dark">
                                 <div class="avatar-sm mx-auto mb-2">
@@ -445,46 +445,29 @@
 
     // User search functionality
     document.addEventListener('DOMContentLoaded', function() {
-        // User search functionality
-        const userSearchInput = document.getElementById('user-search');
-        const userSearchButton = document.getElementById('search-users-btn');
-        const userSearchResults = document.getElementById('search-results');
+        const searchInput = document.getElementById('user-search');
+        const searchButton = document.getElementById('search-users-btn');
+        const searchResults = document.getElementById('search-results');
         
-        // People search functionality
-        const peopleSearchInput = document.getElementById('people-search');
-        const peopleSearchButton = document.getElementById('search-people-btn');
-        const peopleSearchResults = document.getElementById('people-search-results');
+        // Handle search on button click
+        searchButton.addEventListener('click', performSearch);
         
-        // Handle user search on button click
-        userSearchButton.addEventListener('click', () => performSearch(userSearchInput, userSearchResults));
-        
-        // Handle user search on Enter key
-        userSearchInput.addEventListener('keypress', function(e) {
+        // Handle search on Enter key
+        searchInput.addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
-                performSearch(userSearchInput, userSearchResults);
+                performSearch();
             }
         });
         
-        // Handle people search on button click
-        peopleSearchButton.addEventListener('click', () => performSearch(peopleSearchInput, peopleSearchResults));
-        
-        // Handle people search on Enter key
-        peopleSearchInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                performSearch(peopleSearchInput, peopleSearchResults);
-            }
-        });
-        
-        // Function to handle search
-        function performSearch(inputElement, resultsContainer) {
-            const query = inputElement.value.trim();
+        function performSearch() {
+            const query = searchInput.value.trim();
             if (!query) {
-                resultsContainer.innerHTML = '<div class="list-group-item">Please enter a search term</div>';
+                showSearchResults([]);
                 return;
             }
             
             // Show loading state
-            resultsContainer.innerHTML = '<div class="text-center p-3"><div class="spinner-border spinner-border-sm" role="status"></div> Searching...</div>';
+            searchResults.innerHTML = '<div class="text-center p-3"><div class="spinner-border spinner-border-sm" role="status"></div> Searching...</div>';
             
             // Send search request to server
             fetch(`/api/users/search?q=${encodeURIComponent(query)}`, {
@@ -495,20 +478,20 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    displaySearchResults(data.users, resultsContainer);
+                    showSearchResults(data.users);
                 } else {
                     throw new Error(data.message || 'Search failed');
                 }
             })
             .catch(error => {
                 console.error('Search error:', error);
-                resultsContainer.innerHTML = `<div class="text-danger p-2">Error: ${error.message || 'Failed to search users'}</div>`;
+                searchResults.innerHTML = `<div class="text-danger p-2">Error: ${error.message || 'Failed to search users'}</div>`;
             });
         }
         
-        function displaySearchResults(users, resultsContainer) {
+        function showSearchResults(users) {
             if (!users || users.length === 0) {
-                resultsContainer.innerHTML = '<div class="list-group-item">No users found</div>';
+                searchResults.innerHTML = '<div class="text-muted p-2">No users found</div>';
                 return;
             }
             
