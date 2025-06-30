@@ -24,9 +24,6 @@
                         <a href="{{ url_for('user_settings') }}" class="btn btn-outline-primary btn-sm">
                             <i class="fas fa-cog me-1"></i> Settings
                         </a>
-                        <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#inviteModal">
-                            <i class="fas fa-user-plus me-1"></i> Invite
-                        </button>
                     </div>
                 </div>
             </div>
@@ -266,32 +263,6 @@
     </div>
 </div>
 
-<!-- Invite Modal -->
-<div class="modal fade" id="inviteModal" tabindex="-1" aria-labelledby="inviteModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="inviteModalLabel">Invite Friends</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <p>Invite your friends to join SecureComm and enjoy private, encrypted messaging!</p>
-                <div class="mb-3">
-                    <label for="inviteEmail" class="form-label">Email address</label>
-                    <input type="email" class="form-control" id="inviteEmail" placeholder="friend@example.com">
-                </div>
-                <div class="mb-3">
-                    <label for="inviteMessage" class="form-label">Personal message (optional)</label>
-                    <textarea class="form-control" id="inviteMessage" rows="3" placeholder="Join me on Secure Chat for private messaging!"></textarea>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                <button type="button" class="btn btn-primary">Send Invite</button>
-            </div>
-        </div>
-    </div>
-</div>
 {% endblock %}
 
 {% block scripts %}
@@ -478,7 +449,9 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    showSearchResults(data.users);
+                    const qLower = query.toLowerCase();
+                    const filtered = (data.users || []).filter(u => (u.username || '').toLowerCase().includes(qLower));
+                    showSearchResults(filtered);
                 } else {
                     throw new Error(data.message || 'Search failed');
                 }
