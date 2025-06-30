@@ -8,3 +8,4 @@ gunicorn
 eventlet
 Werkzeug
 bcrypt
+flask_pymongo
