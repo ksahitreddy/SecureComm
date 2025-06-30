@@ -56,8 +56,13 @@ mongo = PyMongo(app)
 
 # Initialize GridFS after app context is available
 def init_gridfs():
+    """Initialize GridFS objects safely.
+    Uses PyMongo client to get database by name to avoid cases where mongo.db is None
+    (e.g., if default DB not parsed correctly from the URI)."""
     with app.app_context():
-        return GridFS(mongo.db), GridFSBucket(mongo.db)
+        # Obtain the database explicitly by name
+        db = mongo.cx.get_database(DATABASE_NAME)
+        return GridFS(db), GridFSBucket(db)
 
 # Initialize GridFS
 fs, fs_bucket = init_gridfs()
