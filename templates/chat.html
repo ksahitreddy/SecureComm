@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Chat with {{ recipient }} - SecureComm{% endblock %}
+{% block title %}Chat with {{ recipient }} - Secure Chat{% endblock %}
 
 {% block content %}
 <div class="row">
@@ -162,22 +162,25 @@
             return;
         }
         
-        fileInfo.textContent = `Selected: ${file.name} (${formatFileSize(file.size)})`;
-        fileInfo.className = 'text-success fst-italic';
+        fileInfo.textContent = `Uploading ${file.name} (${formatFileSize(file.size)})...`;
+        fileInfo.className = 'text-primary fst-italic';
         
-        // Auto-upload the file
+        // Show progress bar
         const progressContainer = document.getElementById('upload-progress-container');
         const progressBar = document.getElementById('upload-progress');
         progressContainer.classList.remove('d-none');
         
+        // Create form data
         const formData = new FormData();
         formData.append('file', file);
         formData.append('recipient', '{{ recipient }}');
         
         try {
+            // Upload the file
             const response = await fetch('/api/upload', {
                 method: 'POST',
                 body: formData,
+                // Note: Don't set Content-Type header when using FormData
             });
             
             const result = await response.json();
@@ -185,12 +188,49 @@
             if (result.success) {
                 // Add file message to chat
                 const fileLink = `<a href="${result.download_url}" target="_blank" class="text-primary">${file.name}</a>`;
-                sendMessage(`📎 ${fileLink} (${formatFileSize(file.size)})`);
                 
-                // Reset file input and info
+                // Create a proper message object that matches what the server would send
+                const messageData = {
+                    sender: '{{ user.username }}',
+                    content: `📎 ${fileLink} (${formatFileSize(file.size)})`,
+                    is_file: true,
+                    file_info: {
+                        name: file.name,
+                        size: file.size,
+                        type: file.type,
+                        url: result.download_url
+                    },
+                    timestamp: new Date().toISOString(),
+                    status: 'delivered'
+                };
+                
+                // Add message to UI
+                addMessageToUI(
+                    messageData.sender,
+                    messageData.content,
+                    'sent',
+                    messageData.timestamp,
+                    true,  // isPlaintext
+                    null,  // messageId
+                    'delivered',  // status
+                    true   // isFile
+                );
+                
+                // Reset file input and show success message
                 this.value = '';
                 fileInfo.textContent = 'File sent successfully';
-                setTimeout(() => fileInfo.textContent = '', 3000);
+                fileInfo.className = 'text-success fst-italic';
+                
+                // Clear success message after 3 seconds
+                setTimeout(() => {
+                    if (fileInfo.textContent === 'File sent successfully') {
+                        fileInfo.textContent = '';
+                    }
+                }, 3000);
+                
+                // Scroll to bottom of chat
+                scrollToBottom();
+                
             } else {
                 throw new Error(result.message || 'Failed to upload file');
             }
@@ -222,36 +262,31 @@
     function sendMessage(message) {
         if (!message.trim()) return;
         
-        const messageId = generateMessageId();
+        const messageId = 'msg-' + Date.now();
         const timestamp = new Date().toISOString();
         
-        // Add message to UI immediately with 'sending' status
-        const messageElement = addMessageToUI(
-            currentUser,
-            message,
-            'sent',
-            timestamp,
-            false,
-            messageId,
-            'sending'
-        );
+        // Add message to UI immediately
+        addMessageToUI('{{ user.username }}', message, 'sent', timestamp, true, messageId, 'sending');
         
-        // Send to server for encryption and delivery
+        // Send message via Socket.IO
         socket.emit('send_message', {
-            recipient: recipient,
+            recipient: '{{ recipient }}',
             message: message,
             message_id: messageId
         });
         
-        // Clear input
-        messageInput.value = '';
-        messageInput.focus();
-        
-        addEncryptionLog('🔒 Encrypting message with ' + recipient + '\'s public key...', 'info');
-        return messageElement;
+        // Clear input and scroll to bottom
+        document.getElementById('message-input').value = '';
+        scrollToBottom();
     }
     
     function addMessageToUI(sender, content, type, timestamp, isPlaintext = false, messageId = null, status = null, isFile = false) {
+        // If message with this ID already exists, don't add it again
+        if (messageId && document.querySelector(`[data-message-id="${messageId}"]`)) {
+            return null;
+        }
+        // Generate a unique ID for the message if not provided
+        messageId = messageId || 'msg-' + Date.now();
         messageId = messageId || generateMessageId();
         const isSent = type === 'sent';
         const messageElement = document.createElement('div');
@@ -267,9 +302,17 @@
         
         const contentElement = document.createElement('div');
         contentElement.className = 'message-text';
-        contentElement.textContent = isPlaintext ? content : 'Encrypted message (click to decrypt)';
         
-        if (!isPlaintext) {
+        // If this is a file message, render the HTML so the link is clickable
+        if (isFile) {
+            contentElement.innerHTML = content; // safe because server already sanitized the link
+        } else if (isPlaintext) {
+            contentElement.textContent = content;
+        } else {
+            contentElement.textContent = 'Encrypted message (click to decrypt)';
+        }
+        
+        if (!isPlaintext && !isFile) {
             contentElement.style.cursor = 'pointer';
             contentElement.onclick = () => decryptMessage(messageElement, content, messageId);
             contentElement.innerHTML += ' <i class="fas fa-lock"></i>';
@@ -430,9 +473,30 @@
             
             // Process messages in reverse chronological order
             messages.slice().reverse().forEach(msg => {
-                if (!msg || typeof msg !== 'object') return;
+            if (!msg || typeof msg !== 'object') return;
+            
+            const isSent = (msg.sender === currentUser);
+            
+            if (msg.is_file && msg.file_info) {
+                // Build file link
+                const fi = msg.file_info;
+                const fileLink = `<a href="${fi.download_url}" target="_blank" class="text-primary">${fi.filename}</a>`;
+                addMessageToUI(
+                    msg.sender || 'Unknown',
+                    `📎 ${fileLink} (${formatFileSize(fi.size)})`,
+                    isSent ? 'sent' : 'received',
+                    msg.timestamp || new Date().toISOString(),
+                    true, // isPlaintext
+                    msg.message_id || null,
+                    msg.delivered ? 'delivered' : 'sent',
+                    true
+                );
+                return; // Skip encrypted handling
+            }
+
+    
                 
-                const isSent = (msg.sender === currentUser);
+                // isSent already determined above
                 addMessageToUI(
                     msg.sender || 'Unknown', 
                     msg.encrypted_content || '', 
@@ -519,29 +583,74 @@
             }
         }
     });
-    
+    // Handle incoming text messages
     socket.on('new_message', function(data) {
-        messagesReceived++;
-        updateStats();
+        console.log('New message received:', data);
         
-        const messageId = data.message_id || generateMessageId();
+        // Check if we already have this message to avoid duplicates
+        if (data.message_id && document.querySelector(`[data-message-id="${data.message_id}"]`)) {
+            return;
+        }
+        
+        const isSent = data.sender === currentUser;
         const messageElement = addMessageToUI(
-            data.sender, 
-            data.encrypted_content, 
-            'received', 
+            data.sender,
+            data.encrypted_content,
+            isSent ? 'sent' : 'received',
             data.timestamp || new Date().toISOString(),
-            false,
-            messageId
+            false,  // isPlaintext
+            data.message_id,
+            data.delivered ? 'delivered' : 'sent',
+            data.is_file
         );
         
-        // Add click handler for decryption
-        const contentDiv = messageElement.querySelector('.message-text');
-        if (contentDiv && !data.isPlaintext) {
-            contentDiv.style.cursor = 'pointer';
-            contentDiv.onclick = () => decryptMessage(messageElement, data.encrypted_content, messageId);
+        if (!messageElement) return;
+        
+        // If this is an incoming message, try to decrypt it
+        if (!isSent) {
+            decryptMessage(messageElement, data.encrypted_content, data.message_id);
         }
+        
+        // Update message status if it's our message
+        if (isSent && data.delivered) {
+            const statusElement = messageElement.querySelector('.message-status');
+            if (statusElement) {
+                updateMessageStatus(statusElement, 'delivered');
+            }
+        }
+        
+        scrollToBottom();
     });
     
+    // Handle incoming file messages
+    socket.on('new_file_message', function(data) {
+        console.log('New file message received:', data);
+        
+        // Check if we already have this message to avoid duplicates
+        if (data.message_id && document.querySelector(`[data-message-id="${data.message_id}"]`)) {
+            return;
+        }
+        
+        const isSent = data.sender === currentUser;
+        const fileInfo = data.file_info;
+        const fileLink = `<a href="${fileInfo.download_url}" target="_blank" class="text-primary">${fileInfo.filename}</a>`;
+        
+        // Add message to UI
+        addMessageToUI(
+            data.sender,
+            `📎 ${fileLink} (${formatFileSize(fileInfo.size)})`,
+            isSent ? 'sent' : 'received',
+            data.timestamp || new Date().toISOString(),
+            true,  // isPlaintext
+            data.message_id,
+            'delivered',
+            true   // isFile
+        );
+        
+        scrollToBottom();
+    });
+    
+    // Handle user status updates
     socket.on('user_status', function(data) {
         if (data.username === recipient) {
             const statusElement = document.getElementById('recipient-status');
@@ -552,6 +661,7 @@
         }
     });
     
+    // Handle decryption errors
     socket.on('decryption_error', function(data) {
         const messageElement = document.querySelector(`[data-message-id="${data.message_id}"]`);
         if (messageElement) {
