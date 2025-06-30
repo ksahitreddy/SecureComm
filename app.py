@@ -364,24 +364,28 @@ class MongoDBAuth:
         except Exception as e:
             logger.error(f"Set user offline error: {e}")
     
-    def save_message(self, sender, recipient, enc_for_recipient, enc_for_sender, message_id, is_file=False, file_info=None):
+    def save_message(self, sender, recipient, encrypted_content, message_id, is_file=False, file_info=None, enc_for_sender=None):
         """Save encrypted message with copies for both recipient and sender"""
         try:
+            # Determine appropriate encrypted fields
+            encrypted_for_recipient = encrypted_content
+            encrypted_for_sender = enc_for_sender
+
             message = {
                 '_id': message_id,
                 'message_id': message_id,
                 'sender': sender,
                 'recipient': recipient,
-                'encrypted_for_recipient': enc_for_recipient,
-                'encrypted_for_sender': enc_for_sender,
+                'encrypted_for_recipient': encrypted_for_recipient,
+                'encrypted_for_sender': encrypted_for_sender,
                 'timestamp': datetime.utcnow(),
                 'delivered': False,
                 'read': False,
                 'is_file': is_file,
                 'file_info': file_info if is_file else None
             }
-            # For backward compatibility
-            message['encrypted_content'] = enc_for_recipient
+            # For backward compatibility with existing clients/records
+            message['encrypted_content'] = encrypted_for_recipient
             self.messages.insert_one(message)
             return True
         except Exception as e:
