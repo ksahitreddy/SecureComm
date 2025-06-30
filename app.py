@@ -8,6 +8,7 @@ Fixed: JSON serialization error with MongoDB ObjectId
 from functools import wraps
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session, flash, send_from_directory
 from flask_socketio import SocketIO, emit, join_room, leave_room, rooms
+from flask_pymongo import PyMongo
 import pymongo
 import bcrypt
 import os
@@ -16,12 +17,16 @@ from werkzeug.utils import secure_filename
 import logging
 import json
 import base64
-from bson import ObjectId
+from bson import ObjectId, Binary
+from bson.binary import Binary
+from gridfs import GridFS, GridFSBucket
+from bson.objectid import ObjectId
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.backends import default_backend
 import secrets
 import re
+import mimetypes
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -31,14 +36,8 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY')
 
 # File upload configuration
-UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
-ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'zip'}
+ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'zip', }
 MAX_CONTENT_LENGTH = 10 * 1024 * 1024  # 10MB max file size
-
-# Ensure upload folder exists
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
 
 # Initialize SocketIO with CORS support
@@ -51,6 +50,17 @@ USERS_COLLECTION = 'users'
 MESSAGES_COLLECTION = 'messages'
 KEYS_COLLECTION = 'user_keys'
 
+# Configure MongoDB
+app.config["MONGO_URI"] = MONGO_URI
+mongo = PyMongo(app)
+
+# Initialize GridFS after app context is available
+def init_gridfs():
+    with app.app_context():
+        return GridFS(mongo.db), GridFSBucket(mongo.db)
+
+# Initialize GridFS
+fs, fs_bucket = init_gridfs()
 # Custom JSON encoder for MongoDB ObjectId
 class MongoJSONEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -170,9 +180,8 @@ class CryptoManager:
             return None
 
 class MongoDBAuth:
-    def __init__(self, mongo_uri, db_name):
-        self.client = pymongo.MongoClient(mongo_uri)
-        self.db = self.client[db_name]
+    def __init__(self, mongo_db):
+        self.db = mongo_db
         self.users = self.db[USERS_COLLECTION]
         self.messages = self.db[MESSAGES_COLLECTION]
         self.keys = self.db[KEYS_COLLECTION]
@@ -182,10 +191,10 @@ class MongoDBAuth:
             self.users.create_index("username", unique=True)
             self.keys.create_index("username", unique=True)
             self.messages.create_index([("sender", 1), ("recipient", 1), ("timestamp", -1)])
-            logger.info("MongoDB connection established and indexes created")
+            logger.info("MongoDB collections and indexes verified")
         except Exception as e:
             logger.error(f"MongoDB setup error: {e}")
-    
+            raise    
     def _serialize_document(self, doc):
         """Convert MongoDB document to JSON-safe format"""
         if doc is None:
@@ -348,21 +357,38 @@ class MongoDBAuth:
         except Exception as e:
             logger.error(f"Set user offline error: {e}")
     
-    def save_message(self, sender, recipient, encrypted_message, message_id):
+    def save_message(self, sender, recipient, encrypted_message, message_id, is_file=False, file_info=None):
         """Save encrypted message to database"""
         try:
             message = {
+                '_id': message_id,
+            'message_id': message_id,
                 'sender': sender,
                 'recipient': recipient,
-                'encrypted_content': encrypted_message,
+                'content': encrypted_message,
+            'encrypted_content': encrypted_message,
                 'timestamp': datetime.utcnow(),
-                'message_id': message_id,
-                'delivered': False  # Will be set to True when delivered to recipient
+                'delivered': False,
+                'read': False,
+                'is_file': is_file,
+                'file_info': file_info if is_file else None
             }
-            result = self.messages.insert_one(message)
-            return str(result.inserted_id)
+            self.messages.insert_one(message)
+            return True
         except Exception as e:
-            logger.error(f"Error saving message: {e}")
+            logger.error(f"Error saving message: {e}", exc_info=True)
+            return False
+            
+    def mark_message_delivered(self, message_id):
+        """Mark a message as delivered"""
+        try:
+            self.messages.update_one(
+                {'_id': message_id},
+                {'$set': {'delivered': True, 'delivered_at': datetime.utcnow()}}
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Error marking message as delivered: {e}", exc_info=True)
             return False
     
     def get_messages(self, user1, user2, limit=50):
@@ -426,8 +452,8 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# Initialize MongoDB connection
-mongo_auth = MongoDBAuth(MONGO_URI, DATABASE_NAME)
+# Initialize MongoDB authentication
+mongo_auth = MongoDBAuth(mongo.db)
 
 # Store active socket connections and online users
 active_connections = {}  # username: sid
@@ -566,6 +592,7 @@ def chat(recipient):
     
     return render_template('chat.html',
                            user=user,
+                           current_user={'username': username},  # Add current_user for template
                            recipient=recipient,
                            messages=messages,
                            public_key=public_key_pem,
@@ -687,14 +714,25 @@ def on_connect():
                         {'$set': {'delivered': True}}
                     )
                     
-                    # Send the message to the user
-                    emit('new_message', {
-                        'message_id': msg['message_id'],
-                        'sender': msg['sender'],
-                        'encrypted_content': msg['encrypted_content'],
-                        'timestamp': msg['timestamp'].isoformat(),
-                        'delivered': True
-                    }, room=request.sid)
+                    if msg.get('is_file'):
+                        # Send file message
+                        emit('new_file_message', {
+                            'message_id': msg['message_id'],
+                            'sender': msg['sender'],
+                            'encrypted_content': msg['encrypted_content'],
+                            'file_info': msg.get('file_info', {}),
+                            'timestamp': msg['timestamp'].isoformat(),
+                            'delivered': True
+                        }, room=request.sid)
+                    else:
+                        # Send regular text message
+                        emit('new_message', {
+                            'message_id': msg['message_id'],
+                            'sender': msg['sender'],
+                            'encrypted_content': msg['encrypted_content'],
+                            'timestamp': msg['timestamp'].isoformat(),
+                            'delivered': True
+                        }, room=request.sid)
                     
                     # Notify sender that message was delivered
                     if msg['sender'] in active_connections:
@@ -952,11 +990,45 @@ def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-@app.route('/uploads/<path:filename>')
+def save_file_to_gridfs(file, filename, content_type, metadata=None):
+    """Save file to GridFS and return file ID"""
+    try:
+        file_id = fs.put(
+            file,
+            filename=filename,
+            content_type=content_type,
+            metadata=metadata or {}
+        )
+        return file_id
+    except Exception as e:
+        logger.error(f"Error saving file to GridFS: {e}", exc_info=True)
+        raise
+
+def format_file_size(size_in_bytes):
+    """Convert file size in bytes to human-readable format"""
+    if not size_in_bytes:
+        return "0 B"
+    for unit in ['B', 'KB', 'MB', 'GB']:
+        if size_in_bytes < 1024.0:
+            return f"{size_in_bytes:.1f} {unit}"
+        size_in_bytes /= 1024.0
+    return f"{size_in_bytes:.1f} TB"
+
+@app.route('/api/files/<file_id>')
 @login_required
-def download_file(filename):
-    """Serve uploaded files"""
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
+def download_file(file_id):
+    """Serve files from GridFS"""
+    try:
+        file = fs.get(ObjectId(file_id))
+        response = app.response_class(
+            file,
+            mimetype=file.content_type
+        )
+        response.headers["Content-Disposition"] = f"attachment; filename={file.filename}"
+        return response
+    except Exception as e:
+        logger.error(f"Error downloading file: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': 'File not found'}), 404
 
 @app.route('/api/upload', methods=['POST'])
 @login_required
@@ -974,39 +1046,101 @@ def upload_file():
     if file.filename == '':
         return jsonify({'success': False, 'message': 'No selected file'}), 400
         
-    if file and allowed_file(file.filename):
-        try:
-            # Create a secure filename
-            filename = secure_filename(file.filename)
-            # Add timestamp to make filename unique
-            timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S')
-            filename = f"{timestamp}_{filename}"
-            
-            # Save file
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(filepath)
-            
-            # Get file size
-            file_size = os.path.getsize(filepath)
-            
-            # Generate download URL
-            download_url = url_for('download_file', filename=filename, _external=True)
-            
-            return jsonify({
-                'success': True,
-                'filename': file.filename,
-                'size': file_size,
-                'download_url': download_url
-            })
-            
-        except Exception as e:
-            logger.error(f"Error uploading file: {e}", exc_info=True)
-            return jsonify({'success': False, 'message': str(e)}), 500
-    else:
+    if not file or not allowed_file(file.filename):
         return jsonify({
             'success': False, 
             'message': 'File type not allowed. Allowed types: ' + ', '.join(ALLOWED_EXTENSIONS)
         }), 400
+    
+    try:
+        # Get content type
+        # Read file into memory to determine size accurately
+        import io
+        file_bytes = file.read()
+        file_size = len(file_bytes)
+        # Reset stream for GridFS
+        file_stream = io.BytesIO(file_bytes)
+        
+        content_type = file.content_type or mimetypes.guess_type(file.filename)[0] or 'application/octet-stream'
+        
+        # Prepare metadata
+        metadata = {
+            'uploader': session['username'],
+            'recipient': recipient,
+            'original_filename': file.filename,
+            'upload_date': datetime.utcnow()
+        }
+        
+        # Save file to GridFS
+        file_id = save_file_to_gridfs(
+            file_stream,
+            filename=secure_filename(file.filename),
+            content_type=content_type,
+            metadata=metadata
+        )
+        
+        # Generate download URL
+        download_url = url_for('download_file', file_id=str(file_id))
+        
+        # Prepare file info
+        file_info = {
+            'file_id': str(file_id),
+            'filename': file.filename,
+            'size': file_size,
+            'content_type': content_type,
+            'download_url': download_url
+        }
+        
+        # Save the file message to database
+        sender = session['username']
+        message_id = secrets.token_urlsafe(16)
+        
+        # Create a file message that will be encrypted
+        file_message = f"📎 {file.filename} ({format_file_size(file_size)}) [FILE]"
+        
+        # Encrypt the file message with recipient's public key
+        recipient_public_key = mongo_auth.get_public_key(recipient)
+        if not recipient_public_key:
+            return jsonify({'success': False, 'message': 'Recipient public key not found'}), 400
+            
+        encrypted_message = CryptoManager.encrypt_message(file_message, recipient_public_key)
+        if not encrypted_message:
+            return jsonify({'success': False, 'message': 'Failed to encrypt file message'}), 500
+        
+        # Save the encrypted message
+        if not mongo_auth.save_message(sender, recipient, encrypted_message, message_id, is_file=True, file_info=file_info):
+            return jsonify({'success': False, 'message': 'Failed to save file message'}), 500
+        
+        # Prepare response
+        response_data = {
+            'success': True,
+            'message_id': message_id,
+            'download_url': download_url,
+            'file_info': file_info
+        }
+        
+        # If recipient is online, send the file message directly
+        if recipient in active_connections:
+            socketio.emit('new_file_message', {
+                'message_id': message_id,
+                'sender': sender,
+                'encrypted_content': encrypted_message,
+                'file_info': file_info,
+                'timestamp': datetime.utcnow().isoformat(),
+                'delivered': True
+            }, room=active_connections[recipient])
+            
+            # Mark as delivered
+            mongo_auth.mark_message_delivered(message_id)
+        
+        return jsonify(response_data)
+        
+    except Exception as e:
+        logger.error(f"Error uploading file: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'message': f'Failed to upload file: {str(e)}'
+        }), 500
 
 @app.route('/api/users/search', methods=['GET'])
 @login_required
