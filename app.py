@@ -53,6 +53,8 @@ KEYS_COLLECTION = 'user_keys'
 # Configure MongoDB
 app.config["MONGO_URI"] = MONGO_URI
 mongo = PyMongo(app)
+# Obtain explicit database reference (Flask-PyMongo's mongo.db can be None if DB name not in URI)
+_db = mongo.cx.get_database(DATABASE_NAME)
 
 # Initialize GridFS after app context is available
 def init_gridfs():
@@ -65,7 +67,7 @@ def init_gridfs():
         return GridFS(db), GridFSBucket(db)
 
 # Initialize GridFS
-fs, fs_bucket = init_gridfs()
+fs, fs_bucket = init_gridfs()  # Uses _db internally
 # Custom JSON encoder for MongoDB ObjectId
 class MongoJSONEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -362,22 +364,24 @@ class MongoDBAuth:
         except Exception as e:
             logger.error(f"Set user offline error: {e}")
     
-    def save_message(self, sender, recipient, encrypted_message, message_id, is_file=False, file_info=None):
-        """Save encrypted message to database"""
+    def save_message(self, sender, recipient, enc_for_recipient, enc_for_sender, message_id, is_file=False, file_info=None):
+        """Save encrypted message with copies for both recipient and sender"""
         try:
             message = {
                 '_id': message_id,
-            'message_id': message_id,
+                'message_id': message_id,
                 'sender': sender,
                 'recipient': recipient,
-                'content': encrypted_message,
-            'encrypted_content': encrypted_message,
+                'encrypted_for_recipient': enc_for_recipient,
+                'encrypted_for_sender': enc_for_sender,
                 'timestamp': datetime.utcnow(),
                 'delivered': False,
                 'read': False,
                 'is_file': is_file,
                 'file_info': file_info if is_file else None
             }
+            # For backward compatibility
+            message['encrypted_content'] = enc_for_recipient
             self.messages.insert_one(message)
             return True
         except Exception as e:
@@ -458,7 +462,7 @@ def login_required(f):
     return decorated_function
 
 # Initialize MongoDB authentication
-mongo_auth = MongoDBAuth(mongo.db)
+mongo_auth = MongoDBAuth(_db)
 
 # Store active socket connections and online users
 active_connections = {}  # username: sid
