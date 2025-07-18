@@ -33,7 +33,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY')
+app.secret_key = os.environ.get('SECRET_KEY', 'MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC3WUC1FCsePbuQf/9lRrhPmKbebzuxgLe4Or6we2NZGxsnFYBECnZzv2ZNRglZsHh49odqHWQjQ0mnUvUfhr6FJY6j2h23wpwqGJ1/PT6svDE5ZhfmPBNE4rnnL9f1xLe5hNyfI3JxjM+XhNhav0qClyoNm0NwND3gVeY+wdwRRfHNOsU8l3w4vvQxw4ooSRPpv//mPNnjXAchMjKkhB4O7dtwVsEw8brzQQ6S/gx5d/c/PXEXJ5kyIv797Rqbe8MC5hr22dWeh93VG80DmPCP9Pe9We+Anc299qXSric0Mw82A6wG6Rfi7mbT2zEaByPFe4wBzyn6hQQMfmw3Ws+9AgMBAAECggEAPSrhk4eu+t/Ne1+4bKkzRBrBUOP7HjS7FhNDGs2PT2LjpB5gNFLpQaRRFOaQqANfrbtRYe18Qudn4xKiBGqHlRP6il9yGqQqRUEBCjn8dtQx99w/jOft5cVeD+q+OZfvU00n7U9+FrPLbdk79MpsqTSVKwTpcr17ByShM76pFHmW2o3AFb2euvQdagnQBcipYpjHge2APXQCMl3PtTy5yEzAinFDbw8JkYVzzq99YuIV+g4R3uIQG7hAAtxRBgVCvmFrQZKOphAXC9YhBUaVMbTxR/+Ufxfe22SVyOH4+9JkZj1xEMfPJdujlqVOaYXeHImp2eQlgzfEnGXI117mYQKBgQC47fUvnLZl+hKQdM0i5wk9a/gb3+Mo2ewOhceycpR9K1JlfktY/FLMKS7za3mUQfrVA0+Iw9L6C+SEfZ2YV7NSuJhnIToJE4MRvg7HRmC5/ZzlaQZfYDALcRUlQg+1hHC3obCzA/f+VAMc7glaXGMP65ILWGQS5kLvkmzQJXZCfwKBgQD9z8MqPOWf1tqQiLQnkGR4+HaPgLfl7QFx1cW2BQQnVx6WvUmI/HvMl+AGH7RJipSKiLD54KHpRK6+wAyVQJ5HOF0jjDZq7oLRMieRXHaRhZR0KBqnF2Ki4faQbL8E9ijQf/nmlE6tTZk3gvzGLMbtUx+ppcnkIU9iFJie0dNXwwKBgAPHQNovLn7Y5CY1bLeI1uR9Xz1ajq6X/T2yuAjKVIRWLUHLmciAp0Rqlv38NSi1TGWrwqU9swLO2WVnl5+0MwK+qMZ6pE/pKSVkp7KkmndSWjFJuwqZ0YF6Vv9C4UVJJnBqCk0uCJQWrVWa+2/wMUny+zHmJW1JbRat/DEogskLAoGAIRvKBKd++LPJPRNoFMUkJhebN6r90jNxfcz6Bn1vBka6CcXVYtY0vAKPyZy3IuS97bhZBa+Ez24TMXTR72JHg1jZ5Xoz2w0T6YAWY0LhgKghLmnQ2D0Xs9GwHTTiUh5eQpx/F9H+1WKK+w/OM3fB11GBjtq+lFC4Dz5KjmUmoYsCgYEAnEtKtkg80hOs2CcrNm83J+OeYw/3K/ijhcCDqPZ0r4r98mzXEmCkcCXl0gWNzyGcbTAgv+zDUyygNOlDoW9DeqkIZ8JKME+nWAfmYOm7lDj89Q1/ThjcHSCI7eDnd1bqwUlSjaw1EhtfuvZn4PfWQmGMI9O1bDbBP0fn3Kx4KQs=')
+
 
 # File upload configuration
 ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'zip', }
@@ -44,7 +45,7 @@ app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
 socketio = SocketIO(app, cors_allowed_origins="*", logger=True, engineio_logger=True)
 
 # MongoDB Configuration
-MONGO_URI = os.environ.get('MONGO_URI')
+MONGO_URI = os.environ.get('MONGO_URI', 'mongodb+srv://admins:4postr0phe@stock.sxr4y.mongodb.net/securecomm_db?retryWrites=true&w=majority&appName=Stock')
 DATABASE_NAME = 'securecomm_db'
 USERS_COLLECTION = 'users'
 MESSAGES_COLLECTION = 'messages'
@@ -578,6 +579,105 @@ def dashboard():
                          user=user, 
                          online_users=online_users,
                          recent_messages=recent_messages)
+
+@app.route('/api/keys', methods=['GET'])
+@login_required
+def get_user_keys():
+    """Get current user's encryption keys"""
+    if 'username' not in session:
+        return jsonify({'success': False, 'message': 'Not authenticated'}), 401
+        
+    username = session['username']
+    
+    try:
+        # Get both public and private keys
+        public_key = mongo_auth.get_public_key(username)
+        private_key = mongo_auth.get_private_key(username)
+        
+        if not public_key or not private_key:
+            return jsonify({'success': False, 'message': 'Keys not found'}), 404
+            
+        return jsonify({
+            'success': True,
+            'public_key': public_key,
+            'private_key': private_key
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching user keys: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': 'Failed to fetch keys'}), 500
+
+
+@app.route('/api/validate-encryption', methods=['POST'])
+@login_required
+def validate_encryption():
+    """
+    Validate that a message can be decrypted by the intended recipient.
+    This is a test endpoint to verify the encryption/decryption flow.
+    """
+    if 'username' not in session:
+        return jsonify({'success': False, 'message': 'Not authenticated'}), 401
+        
+    data = request.get_json()
+    if not data or 'recipient' not in data or 'message' not in data:
+        return jsonify({'success': False, 'message': 'Missing required fields'}), 400
+        
+    sender = session['username']
+    recipient = data['recipient']
+    test_message = data['message']
+    
+    try:
+        # 1. Get recipient's public key
+        recipient_public_key = mongo_auth.get_public_key(recipient)
+        if not recipient_public_key:
+            return jsonify({
+                'success': False,
+                'message': 'Recipient public key not found'
+            }), 404
+            
+        # 2. Encrypt the message with recipient's public key
+        encrypted_message = CryptoManager.encrypt_message(test_message, recipient_public_key)
+        if not encrypted_message:
+            return jsonify({
+                'success': False,
+                'message': 'Failed to encrypt message'
+            }), 500
+            
+        # 3. Get recipient's private key (for validation)
+        recipient_private_key = mongo_auth.get_private_key(recipient)
+        if not recipient_private_key:
+            return jsonify({
+                'success': False,
+                'message': 'Recipient private key not found (for validation)'
+            }), 500
+        
+        # 4. Decrypt the message with recipient's private key
+        decrypted_message = CryptoManager.decrypt_message(encrypted_message, recipient_private_key)
+        
+        # 5. Compare original and decrypted messages
+        is_valid = decrypted_message == test_message
+        
+        return jsonify({
+            'success': True,
+            'is_valid': is_valid,
+            'original_message': test_message,
+            'encrypted_message': encrypted_message,
+            'decrypted_message': decrypted_message,
+            'validation_passed': is_valid,
+            'validation_details': {
+                'encrypted_with': f"{recipient}'s public key",
+                'decrypted_with': f"{recipient}'s private key"
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Encryption validation error: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'message': f'Validation failed: {str(e)}',
+            'validation_passed': False
+        }), 500
+
 
 @app.route('/chat/<recipient>')
 @login_required
