@@ -67,11 +67,74 @@
     
     <div class="col-md-4">
         <div class="card">
-            <div class="card-header">
-                <h6><i class="fas fa-shield-alt"></i> Encryption Status</h6>
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="fas fa-shield-alt"></i> Encryption Status</h6>
+                <div>
+                    <button class="btn btn-sm btn-outline-info me-2" id="validate-encryption-btn" title="Test encryption with {{ recipient }}">
+                        <i class="fas fa-check-circle"></i> Validate
+                    </button>
+                    <button class="btn btn-sm btn-outline-primary" id="toggle-keys-btn">
+                        <i class="fas fa-key"></i> Show My Keys
+                    </button>
+                </div>
             </div>
             <div class="card-body">
-                <div id="encryption-log" style="height: 400px; overflow-y: auto;">
+                <div id="encryption-keys" class="mb-3 d-none">
+                    <div class="mb-3">
+                        <label class="form-label small text-muted mb-1">Public Key</label>
+                        <div class="input-group mb-2">
+                            <textarea id="public-key" class="form-control font-monospace small" rows="4" readonly></textarea>
+                            <button class="btn btn-outline-secondary copy-btn" data-target="public-key" type="button" title="Copy to clipboard">
+                                <i class="far fa-copy"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <label class="form-label small text-muted mb-1">Private Key</label>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="show-private-key">
+                                <label class="form-check-label small" for="show-private-key">Show</label>
+                            </div>
+                        </div>
+                        <div class="input-group">
+                            <textarea id="private-key" class="form-control font-monospace small" rows="4" readonly></textarea>
+                            <button class="btn btn-outline-secondary copy-btn" data-target="private-key" type="button" title="Copy to clipboard">
+                                <i class="far fa-copy"></i>
+                            </button>
+                        </div>
+                        <div class="form-text text-warning small">
+                            <i class="fas fa-exclamation-triangle"></i> Keep your private key secret and never share it with anyone.
+                        </div>
+                    </div>
+                    <hr>
+                </div>
+                <div id="validation-results" class="d-none mb-3">
+                    <div class="card border-0 bg-light">
+                        <div class="card-body p-3">
+                            <h6 class="card-title d-flex justify-content-between align-items-center mb-2">
+                                <span><i class="fas fa-shield-vault"></i> Encryption Test</span>
+                                <span id="validation-status" class="badge">Testing...</span>
+                            </h6>
+                            <div id="validation-details" class="small">
+                                <div class="mb-2">
+                                    <span class="text-muted">Original:</span>
+                                    <code id="test-original" class="ms-1 text-break"></code>
+                                </div>
+                                <div class="mb-2">
+                                    <span class="text-muted">Encrypted:</span>
+                                    <code id="test-encrypted" class="ms-1 text-break small"></code>
+                                </div>
+                                <div class="mb-2">
+                                    <span class="text-muted">Decrypted:</span>
+                                    <code id="test-decrypted" class="ms-1 text-break"></code>
+                                </div>
+                                <div id="validation-message" class="mt-2"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="encryption-log" style="height: 200px; overflow-y: auto;">
                     <div class="encryption-log">
                         <i class="fas fa-info-circle"></i> Ready for secure messaging
                     </div>
@@ -735,6 +798,183 @@
     
     socket.on('disconnect', function() {
         addEncryptionLog('🔌 Disconnected from server', 'warning');
+    });
+
+    // Toggle keys visibility
+    const toggleKeysBtn = document.getElementById('toggle-keys-btn');
+    const encryptionKeysSection = document.getElementById('encryption-keys');
+    const showPrivateKeyCheckbox = document.getElementById('show-private-key');
+    const privateKeyTextarea = document.getElementById('private-key');
+    const validateBtn = document.getElementById('validate-encryption-btn');
+    const validationResults = document.getElementById('validation-results');
+    const validationStatus = document.getElementById('validation-status');
+    const validationMessage = document.getElementById('validation-message');
+    
+    // Toggle keys section
+    toggleKeysBtn?.addEventListener('click', async () => {
+        const isHidden = encryptionKeysSection.classList.toggle('d-none');
+        
+        if (!isHidden && !encryptionKeysSection.dataset.loaded) {
+            try {
+                // Show loading state
+                toggleKeysBtn.disabled = true;
+                toggleKeysBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading keys...';
+                
+                // Fetch keys from server
+                const response = await fetch('/api/keys');
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Display public key
+                    document.getElementById('public-key').value = data.public_key;
+                    
+                    // Display private key (initially hidden)
+                    privateKeyTextarea.value = data.private_key;
+                    
+                    // Mark as loaded
+                    encryptionKeysSection.dataset.loaded = 'true';
+                    
+                    // Update button text
+                    toggleKeysBtn.innerHTML = '<i class="fas fa-key"></i> Hide My Keys';
+                    
+                    // Add encryption log
+                    addEncryptionLog('🔑 Encryption keys loaded', 'success');
+                } else {
+                    throw new Error(data.message || 'Failed to load keys');
+                }
+            } catch (error) {
+                console.error('Error loading keys:', error);
+                addEncryptionLog('❌ Failed to load encryption keys', 'danger');
+                // Hide the keys section on error
+                encryptionKeysSection.classList.add('d-none');
+            } finally {
+                toggleKeysBtn.disabled = false;
+                if (encryptionKeysSection.classList.contains('d-none')) {
+                    toggleKeysBtn.innerHTML = '<i class="fas fa-key"></i> Show My Keys';
+                }
+            }
+        } else {
+            // Toggle button text
+            toggleKeysBtn.innerHTML = isHidden ? 
+                '<i class="fas fa-key"></i> Show My Keys' : 
+                '<i class="fas fa-key"></i> Hide My Keys';
+        }
+    });
+    
+    // Toggle private key visibility
+    showPrivateKeyCheckbox?.addEventListener('change', (e) => {
+        privateKeyTextarea.type = e.target.checked ? 'text' : 'password';
+    });
+    
+    // Handle encryption validation
+    validateBtn?.addEventListener('click', async () => {
+        if (!validateBtn.classList.contains('disabled')) {
+            try {
+                // Show loading state
+                validateBtn.classList.add('disabled');
+                validateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
+                
+                // Show validation section
+                validationResults.classList.remove('d-none');
+                validationStatus.textContent = 'Testing...';
+                validationStatus.className = 'badge bg-secondary';
+                
+                // Generate a random test message
+                const testMessage = `Test message ${Math.random().toString(36).substring(2, 8)}`;
+                
+                // Call the validation endpoint
+                const response = await fetch('/api/validate-encryption', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        recipient: '{{ recipient }}',
+                        message: testMessage
+                    })
+                });
+                
+                const data = await response.json();
+                
+                // Update UI with results
+                document.getElementById('test-original').textContent = data.original_message || testMessage;
+                document.getElementById('test-encrypted').textContent = data.encrypted_message || 'Error';
+                document.getElementById('test-decrypted').textContent = data.decrypted_message || 'Error';
+                
+                if (data.success && data.validation_passed) {
+                    validationStatus.textContent = 'Success';
+                    validationStatus.className = 'badge bg-success';
+                    validationMessage.innerHTML = `
+                        <div class="alert alert-success p-2 mb-0">
+                            <i class="fas fa-check-circle me-1"></i>
+                            Message successfully encrypted with {{ recipient }}'s public key and decrypted with their private key.
+                        </div>`;
+                    addEncryptionLog('✅ Encryption test passed successfully', 'success');
+                } else {
+                    validationStatus.textContent = 'Failed';
+                    validationStatus.className = 'badge bg-danger';
+                    validationMessage.innerHTML = `
+                        <div class="alert alert-danger p-2 mb-0">
+                            <i class="fas fa-exclamation-triangle me-1"></i>
+                            ${data.message || 'Encryption validation failed. The message could not be decrypted correctly.'}
+                        </div>`;
+                    addEncryptionLog('❌ Encryption test failed: ' + (data.message || 'Unknown error'), 'danger');
+                }
+                
+            } catch (error) {
+                console.error('Validation error:', error);
+                validationStatus.textContent = 'Error';
+                validationStatus.className = 'badge bg-danger';
+                validationMessage.innerHTML = `
+                    <div class="alert alert-danger p-2 mb-0">
+                        <i class="fas fa-exclamation-triangle me-1"></i>
+                        An error occurred during validation. Please check the console for details.
+                    </div>`;
+                addEncryptionLog('❌ Error during encryption test', 'danger');
+            } finally {
+                // Reset button state
+                validateBtn.classList.remove('disabled');
+                validateBtn.innerHTML = '<i class="fas fa-check-circle"></i> Validate';
+                
+                // Scroll to show results
+                validationResults.scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+    });
+    
+    // Copy to clipboard functionality
+    document.querySelectorAll('.copy-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const targetId = btn.getAttribute('data-target');
+            const targetElement = document.getElementById(targetId);
+            
+            if (targetElement) {
+                // Select the text
+                targetElement.select();
+                
+                try {
+                    // Copy to clipboard
+                    document.execCommand('copy');
+                    
+                    // Show feedback
+                    const originalText = btn.innerHTML;
+                    btn.innerHTML = '<i class="fas fa-check"></i>';
+                    btn.classList.add('text-success');
+                    
+                    // Reset after 2 seconds
+                    setTimeout(() => {
+                        btn.innerHTML = originalText;
+                        btn.classList.remove('text-success');
+                    }, 2000);
+                    
+                    // Add log
+                    addEncryptionLog(`📋 ${targetId === 'public-key' ? 'Public' : 'Private'} key copied to clipboard`, 'info');
+                } catch (err) {
+                    console.error('Failed to copy text:', err);
+                    addEncryptionLog('❌ Failed to copy to clipboard', 'danger');
+                }
+            }
+        });
     });
 </script>
 {% endblock %}
