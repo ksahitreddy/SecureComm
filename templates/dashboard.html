@@ -393,9 +393,18 @@
             socket.emit('get_online_users');
         }
         
-        // Update stats (mock data)
-        document.getElementById('total-messages').textContent = Math.floor(Math.random() * 1000);
-        document.getElementById('total-contacts').textContent = Math.floor(Math.random() * 50) + 5;
+        // Fetch real stats
+        fetch('/api/dashboard/stats')
+          .then(res => res.json())
+          .then(data => {
+            if (data.success) {
+              document.getElementById('total-messages').textContent = data.total_messages;
+              document.getElementById('total-contacts').textContent = data.total_contacts;
+            } else {
+              console.error('Failed to fetch stats:', data.message);
+            }
+          })
+          .catch(err => console.error('Error:', err));
         
         // Initialize clipboard for invite link
         const inviteLink = `${window.location.origin}/register?ref=${currentUser}`;
