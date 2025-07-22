@@ -33,7 +33,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY')
+app.secret_key = os.environ.get('SECRET_KEY', 'MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC3WUC1FCsePbuQf/9lRrhPmKbebzuxgLe4Or6we2NZGxsnFYBECnZzv2ZNRglZsHh49odqHWQjQ0mnUvUfhr6FJY6j2h23wpwqGJ1/PT6svDE5ZhfmPBNE4rnnL9f1xLe5hNyfI3JxjM+XhNhav0qClyoNm0NwND3gVeY+wdwRRfHNOsU8l3w4vvQxw4ooSRPpv//mPNnjXAchMjKkhB4O7dtwVsEw8brzQQ6S/gx5d/c/PXEXJ5kyIv797Rqbe8MC5hr22dWeh93VG80DmPCP9Pe9We+Anc299qXSric0Mw82A6wG6Rfi7mbT2zEaByPFe4wBzyn6hQQMfmw3Ws+9AgMBAAECggEAPSrhk4eu+t/Ne1+4bKkzRBrBUOP7HjS7FhNDGs2PT2LjpB5gNFLpQaRRFOaQqANfrbtRYe18Qudn4xKiBGqHlRP6il9yGqQqRUEBCjn8dtQx99w/jOft5cVeD+q+OZfvU00n7U9+FrPLbdk79MpsqTSVKwTpcr17ByShM76pFHmW2o3AFb2euvQdagnQBcipYpjHge2APXQCMl3PtTy5yEzAinFDbw8JkYVzzq99YuIV+g4R3uIQG7hAAtxRBgVCvmFrQZKOphAXC9YhBUaVMbTxR/+Ufxfe22SVyOH4+9JkZj1xEMfPJdujlqVOaYXeHImp2eQlgzfEnGXI117mYQKBgQC47fUvnLZl+hKQdM0i5wk9a/gb3+Mo2ewOhceycpR9K1JlfktY/FLMKS7za3mUQfrVA0+Iw9L6C+SEfZ2YV7NSuJhnIToJE4MRvg7HRmC5/ZzlaQZfYDALcRUlQg+1hHC3obCzA/f+VAMc7glaXGMP65ILWGQS5kLvkmzQJXZCfwKBgQD9z8MqPOWf1tqQiLQnkGR4+HaPgLfl7QFx1cW2BQQnVx6WvUmI/HvMl+AGH7RJipSKiLD54KHpRK6+wAyVQJ5HOF0jjDZq7oLRMieRXHaRhZR0KBqnF2Ki4faQbL8E9ijQf/nmlE6tTZk3gvzGLMbtUx+ppcnkIU9iFJie0dNXwwKBgAPHQNovLn7Y5CY1bLeI1uR9Xz1ajq6X/T2yuAjKVIRWLUHLmciAp0Rqlv38NSi1TGWrwqU9swLO2WVnl5+0MwK+qMZ6pE/pKSVkp7KkmndSWjFJuwqZ0YF6Vv9C4UVJJnBqCk0uCJQWrVWa+2/wMUny+zHmJW1JbRat/DEogskLAoGAIRvKBKd++LPJPRNoFMUkJhebN6r90jNxfcz6Bn1vBka6CcXVYtY0vAKPyZy3IuS97bhZBa+Ez24TMXTR72JHg1jZ5Xoz2w0T6YAWY0LhgKghLmnQ2D0Xs9GwHTTiUh5eQpx/F9H+1WKK+w/OM3fB11GBjtq+lFC4Dz5KjmUmoYsCgYEAnEtKtkg80hOs2CcrNm83J+OeYw/3K/ijhcCDqPZ0r4r98mzXEmCkcCXl0gWNzyGcbTAgv+zDUyygNOlDoW9DeqkIZ8JKME+nWAfmYOm7lDj89Q1/ThjcHSCI7eDnd1bqwUlSjaw1EhtfuvZn4PfWQmGMI9O1bDbBP0fn3Kx4KQs=')
+
 
 # File upload configuration
 ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'zip', }
@@ -44,7 +45,7 @@ app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
 socketio = SocketIO(app, cors_allowed_origins="*", logger=True, engineio_logger=True)
 
 # MongoDB Configuration
-MONGO_URI = os.environ.get('MONGO_URI')
+MONGO_URI = os.environ.get('MONGO_URI', 'mongodb+srv://admins:4postr0phe@stock.sxr4y.mongodb.net/securecomm_db?retryWrites=true&w=majority&appName=Stock')
 DATABASE_NAME = 'securecomm_db'
 USERS_COLLECTION = 'users'
 MESSAGES_COLLECTION = 'messages'
@@ -472,6 +473,17 @@ mongo_auth = MongoDBAuth(_db)
 active_connections = {}  # username: sid
 online_users = set()  # Set of usernames that are currently online
 
+# Store WebRTC peer connections and call data
+call_rooms = {}
+peer_connections = {}
+
+# ICE Servers configuration (you may want to use your own STUN/TURN servers in production)
+ICE_SERVERS = [
+    {'urls': 'stun:stun.l.google.com:19302'},
+    {'urls': 'stun:stun1.l.google.com:19302'},
+    {'urls': 'stun:stun2.l.google.com:19302'}
+]
+
 # Removed duplicate login_required decorator as it's already defined in auth.py
 
 @app.route('/')
@@ -578,6 +590,105 @@ def dashboard():
                          user=user, 
                          online_users=online_users,
                          recent_messages=recent_messages)
+
+@app.route('/api/keys', methods=['GET'])
+@login_required
+def get_user_keys():
+    """Get current user's encryption keys"""
+    if 'username' not in session:
+        return jsonify({'success': False, 'message': 'Not authenticated'}), 401
+        
+    username = session['username']
+    
+    try:
+        # Get both public and private keys
+        public_key = mongo_auth.get_public_key(username)
+        private_key = mongo_auth.get_private_key(username)
+        
+        if not public_key or not private_key:
+            return jsonify({'success': False, 'message': 'Keys not found'}), 404
+            
+        return jsonify({
+            'success': True,
+            'public_key': public_key,
+            'private_key': private_key
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching user keys: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': 'Failed to fetch keys'}), 500
+
+
+@app.route('/api/validate-encryption', methods=['POST'])
+@login_required
+def validate_encryption():
+    """
+    Validate that a message can be decrypted by the intended recipient.
+    This is a test endpoint to verify the encryption/decryption flow.
+    """
+    if 'username' not in session:
+        return jsonify({'success': False, 'message': 'Not authenticated'}), 401
+        
+    data = request.get_json()
+    if not data or 'recipient' not in data or 'message' not in data:
+        return jsonify({'success': False, 'message': 'Missing required fields'}), 400
+        
+    sender = session['username']
+    recipient = data['recipient']
+    test_message = data['message']
+    
+    try:
+        # 1. Get recipient's public key
+        recipient_public_key = mongo_auth.get_public_key(recipient)
+        if not recipient_public_key:
+            return jsonify({
+                'success': False,
+                'message': 'Recipient public key not found'
+            }), 404
+            
+        # 2. Encrypt the message with recipient's public key
+        encrypted_message = CryptoManager.encrypt_message(test_message, recipient_public_key)
+        if not encrypted_message:
+            return jsonify({
+                'success': False,
+                'message': 'Failed to encrypt message'
+            }), 500
+            
+        # 3. Get recipient's private key (for validation)
+        recipient_private_key = mongo_auth.get_private_key(recipient)
+        if not recipient_private_key:
+            return jsonify({
+                'success': False,
+                'message': 'Recipient private key not found (for validation)'
+            }), 500
+        
+        # 4. Decrypt the message with recipient's private key
+        decrypted_message = CryptoManager.decrypt_message(encrypted_message, recipient_private_key)
+        
+        # 5. Compare original and decrypted messages
+        is_valid = decrypted_message == test_message
+        
+        return jsonify({
+            'success': True,
+            'is_valid': is_valid,
+            'original_message': test_message,
+            'encrypted_message': encrypted_message,
+            'decrypted_message': decrypted_message,
+            'validation_passed': is_valid,
+            'validation_details': {
+                'encrypted_with': f"{recipient}'s public key",
+                'decrypted_with': f"{recipient}'s private key"
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Encryption validation error: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'message': f'Validation failed: {str(e)}',
+            'validation_passed': False
+        }), 500
+
 
 @app.route('/chat/<recipient>')
 @login_required
@@ -769,31 +880,57 @@ def on_connect():
 @socketio.on('disconnect')
 def on_disconnect():
     """Handle client disconnection"""
-    if 'username' in session:
-        username = session['username']
+    username = None
+    for user, sid in active_connections.items():
+        if sid == request.sid:
+            username = user
+            break
+            
+    if username:
+        # Clean up any active calls
+        if username in call_rooms:
+            room = call_rooms[username]
+            if 'caller' in room and room['caller'] == username:
+                # If the caller disconnects, notify the callee
+                if 'callee' in room and room['callee'] in active_connections:
+                    emit('call_ended', {
+                        'reason': 'caller_disconnected',
+                        'caller': username,
+                        'callee': room['callee']
+                    }, room=active_connections[room['callee']])
+            elif 'callee' in room and room['callee'] == username:
+                # If the callee disconnects, notify the caller
+                if 'caller' in room and room['caller'] in active_connections:
+                    emit('call_ended', {
+                        'reason': 'callee_disconnected',
+                        'caller': room['caller'],
+                        'callee': username
+                    }, room=active_connections[room['caller']])
+            
+            # Clean up the call room
+            if 'caller' in room and room['caller'] in call_rooms:
+                call_rooms.pop(room['caller'], None)
+            if 'callee' in room and room['callee'] in call_rooms:
+                call_rooms.pop(room['callee'], None)
         
-        # Only process disconnection if this was the last connection for the user
-        if username in active_connections and active_connections[username] == request.sid:
-            if username in online_users:
-                online_users.remove(username)
-            
-            if username in active_connections:
-                del active_connections[username]
-            
+        # Remove from active connections
+        active_connections.pop(username, None)
+        
+        # Update online status if this was the last session
+        if username not in active_connections:
+            online_users.discard(username)
             mongo_auth.set_user_offline(username)
-            leave_room(username)
             
-            # Only notify others if the user is actually going offline
-            if username not in active_connections:
-                emit('user_status', {
-                    'username': username, 
-                    'status': 'offline',
-                    'timestamp': datetime.utcnow().isoformat()
-                }, broadcast=True, skip_sid=request.sid)
+            # Notify other users
+            emit('user_status', {
+                'username': username,
+                'status': 'offline',
+                'timestamp': datetime.utcnow().isoformat()
+            }, broadcast=True, include_self=False)
             
-            logger.info(f"User disconnected: {username}. Remaining online users: {list(online_users)}")
-        else:
-            logger.info(f"User {username} has other active connections")
+            logger.info(f"User {username} disconnected")
+    else:
+        logger.warning(f"Unknown session disconnected: {request.sid}")
 
 @socketio.on('send_message')
 def handle_message(data):
@@ -1188,6 +1325,175 @@ def search_users():
             'success': False,
             'message': 'An error occurred while searching for users'
         }), 500
+
+# WebRTC Signaling Events
+@socketio.on('start_call')
+def handle_start_call(data):
+    """Handle call initiation"""
+    caller = data.get('from')
+    callee = data.get('to')
+    call_type = data.get('type', 'video')  # 'video' or 'voice'
+    
+    if not caller or not callee:
+        return
+    
+    # Create a call room
+    call_rooms[caller] = {
+        'caller': caller,
+        'callee': callee,
+        'type': call_type,
+        'status': 'calling'
+    }
+    call_rooms[callee] = call_rooms[caller]  # Both users point to the same room
+    
+    # Notify the callee
+    if callee in active_connections:
+        emit('incoming_call', {
+            'from': caller,
+            'type': call_type,
+            'caller_username': caller,
+            'caller_avatar': url_for('static', filename=f'uploads/avatars/{caller}.jpg')
+        }, room=active_connections[callee])
+
+@socketio.on('accept_call')
+def handle_accept_call(data):
+    """Handle call acceptance"""
+    caller = data.get('caller')
+    callee = data.get('callee')
+    
+    if caller in call_rooms and callee in call_rooms:
+        call_rooms[caller]['status'] = 'in-progress'
+        call_rooms[callee]['status'] = 'in-progress'
+        
+        # Notify the caller that the call was accepted
+        if caller in active_connections:
+            emit('call_accepted', {
+                'callee': callee
+            }, room=active_connections[caller])
+
+@socketio.on('reject_call')
+def handle_reject_call(data):
+    """Handle call rejection"""
+    caller = data.get('caller')
+    callee = data.get('callee')
+    reason = data.get('reason', 'declined')
+    
+    # Notify the caller that the call was rejected
+    if caller in active_connections:
+        emit('call_rejected', {
+            'callee': callee,
+            'reason': reason
+        }, room=active_connections[caller])
+    
+    # Clean up
+    if caller in call_rooms:
+        call_rooms.pop(caller, None)
+    if callee in call_rooms:
+        call_rooms.pop(callee, None)
+
+@socketio.on('end_call')
+def handle_end_call(data):
+    """Handle call termination with proper cleanup and notifications"""
+    try:
+        caller = data.get('caller')
+        callee = data.get('callee')
+        reason = data.get('reason', 'Call ended')
+        
+        if not caller or not callee:
+            logger.error(f'Missing caller or callee in end_call: {data}')
+            return
+            
+        logger.info(f'Ending call between {caller} and {callee}. Reason: {reason}')
+        
+        # Find all rooms that involve either the caller or callee
+        rooms_to_clean = set()
+        for username, room in call_rooms.items():
+            if username in [caller, callee] or room.get('caller') in [caller, callee] or room.get('callee') in [caller, callee]:
+                rooms_to_clean.add(username)
+        
+        # Notify both parties and clean up
+        notified = set()
+        for username in rooms_to_clean:
+            room = call_rooms.get(username)
+            if not room:
+                continue
+                
+            other_party = room.get('callee') if room.get('caller') == username else room.get('caller')
+            
+            # Notify the other party if they're still connected and not already notified
+            if other_party and other_party not in notified and other_party in active_connections:
+                emit('call_ended', {
+                    'reason': reason,
+                    'caller': caller,
+                    'callee': callee,
+                    'ended_by': caller if caller != other_party else callee,
+                    'timestamp': datetime.utcnow().isoformat()
+                }, room=active_connections[other_party])
+                logger.info(f'Notified {other_party} that call was ended by {caller}')
+                notified.add(other_party)
+            
+            # Clean up the room
+            call_rooms.pop(username, None)
+        
+        # If we didn't find rooms but have active users, still notify
+        if not rooms_to_clean:
+            for user in [caller, callee]:
+                if user in active_connections and user not in notified:
+                    emit('call_ended', {
+                        'reason': reason,
+                        'caller': caller,
+                        'callee': callee,
+                        'ended_by': caller if caller != user else callee,
+                        'timestamp': datetime.utcnow().isoformat()
+                    }, room=active_connections[user])
+                    logger.info(f'Notified {user} that call was ended (no room found)')
+                    
+    except Exception as e:
+        logger.error(f'Error in handle_end_call: {str(e)}', exc_info=True)
+        # Try to notify both parties of the error
+        for user in [caller, callee]:
+            if user and user in active_connections:
+                emit('call_ended', {
+                    'reason': 'An error occurred',
+                    'caller': caller,
+                    'callee': callee,
+                    'timestamp': datetime.utcnow().isoformat()
+                }, room=active_connections[user])
+
+# WebRTC signaling
+@socketio.on('webrtc_offer')
+def handle_webrtc_offer(data):
+    """Forward WebRTC offer to the callee"""
+    target = data.get('target')
+    if target in active_connections:
+        emit('webrtc_offer', {
+            'sdp': data.get('sdp'),
+            'caller': data.get('caller'),
+            'callee': data.get('callee'),
+            'type': data.get('type')
+        }, room=active_connections[target])
+
+@socketio.on('webrtc_answer')
+def handle_webrtc_answer(data):
+    """Forward WebRTC answer to the caller"""
+    target = data.get('target')
+    if target in active_connections:
+        emit('webrtc_answer', {
+            'sdp': data.get('sdp'),
+            'caller': data.get('caller'),
+            'callee': data.get('callee')
+        }, room=active_connections[target])
+
+@socketio.on('ice_candidate')
+def handle_ice_candidate(data):
+    """Forward ICE candidate to the other peer"""
+    target = data.get('target')
+    if target in active_connections:
+        emit('ice_candidate', {
+            'candidate': data.get('candidate'),
+            'caller': data.get('caller'),
+            'callee': data.get('callee')
+        }, room=active_connections[target])
 
 # Error handlers
 @app.errorhandler(500)
