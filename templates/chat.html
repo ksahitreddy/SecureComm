@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Chat with {{ recipient }} - SecureComm{% endblock %}
+{% block title %}Chat with {{ recipient }} - Secure Chat{% endblock %}
 
 {% block content %}
 <div class="row">
@@ -13,9 +13,7 @@
                     </a>
                     <div>
                         <h5 class="mb-0">{{ recipient }}</h5>
-                        <small class="text-muted" id="recipient-status">
-                            <i class="fas fa-circle text-muted me-1"></i> offline
-                        </small>
+                        
                     </div>
                 </div>
                 <div class="btn-group ms-2">
@@ -1571,16 +1569,7 @@
         scrollToBottom();
     });
     
-    // Handle user status updates
-    socket.on('user_status', function(data) {
-        if (data.username === recipient) {
-            const statusElement = document.getElementById('recipient-status');
-            if (statusElement) {
-                const statusClass = data.status === 'online' ? 'text-success' : 'text-muted';
-                statusElement.innerHTML = `<i class="fas fa-circle ${statusClass} me-1"></i> ${data.status}`;
-            }
-        }
-    });
+
     
     // Handle decryption errors
     socket.on('decryption_error', function(data) {
