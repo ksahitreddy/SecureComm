@@ -1239,7 +1239,7 @@
             updateMessageStatus(statusElement, status || 'sending');
             
             statusElement.appendChild(document.createTextNode(' '));
-            statusElement.appendChild(document.createTextNode(status === 'delivered' ? 'Delivered' : 'Sending...'));
+            statusElement.appendChild(document.createTextNode(status === 'delivered' ? 'Delivered' : ''));
         }
         
         const timeElement = document.createElement('div');
