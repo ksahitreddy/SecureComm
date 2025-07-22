@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Chat with {{ recipient }} - Secure Chat{% endblock %}
+{% block title %}Chat with {{ recipient }} - SecureComm{% endblock %}
 
 {% block content %}
 <div class="row">
@@ -106,7 +106,7 @@
             <div class="card-body p-2">
                 <div class="row g-2">
                     <div class="col-12">
-                        <video id="remoteVideo" autoplay playsinline style="width: 100%; max-height: 200px; background: #000;"></video>
+                        <video id="remoteVideo" autoplay playsinline style="width: 100%; max-height: 350px; background: #000; border-radius: 8px;"></video>
                         <video id="localVideo" autoplay playsinline muted style="position: absolute; bottom: 80px; right: 20px; width: 120px; height: 90px; border: 2px solid #fff; border-radius: 8px; background: #000;"></video>
                         <audio id="remoteAudio" autoplay playsinline style="display:none"></audio>
                     </div>
@@ -235,7 +235,7 @@
     /* Call controls styling */
     #callControls {
         transition: all 0.3s ease;
-        max-width: 300px;
+        max-width: 400px;
     }
     #callControls.minimized {
         transform: translateY(calc(100% - 45px));
@@ -438,12 +438,25 @@
                     remoteVideo.srcObject = remoteStream;
                     remoteVideo.autoplay = true;
                     remoteVideo.playsInline = true;
-                    remoteVideo.muted = false; // Important: don't mute remote audio
-                    
-                    // Ensure video plays
-                    remoteVideo.play().catch(e => {
-                        console.error('Error playing remote video:', e);
-                    });
+                    remoteVideo.muted = false; // keep audio
+
+                    const tryPlay = () => {
+                        const playPromise = remoteVideo.play();
+                        if (playPromise !== undefined) {
+                            playPromise.catch(err => {
+                                console.warn('play() interrupted, will retry on user gesture or canplay', err);
+                            });
+                        }
+                    };
+
+                    if (remoteVideo.readyState >= 2) {
+                        // metadata already loaded
+                        tryPlay();
+                    } else {
+                        remoteVideo.addEventListener('loadedmetadata', () => {
+                            tryPlay();
+                        }, { once: true });
+                    }
                     
                     console.log('Remote stream set to video element');
                     
@@ -1121,7 +1134,7 @@
                     true,  // isPlaintext
                     null,  // messageId
                     'delivered',  // status
-                    true   // isFile
+                    true
                 );
                 
                 // Reset file input and show success message
