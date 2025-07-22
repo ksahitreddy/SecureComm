@@ -18,8 +18,14 @@
                         </small>
                     </div>
                 </div>
-                <div class="dropdown">
-                    <button class="btn btn-outline-secondary btn-sm" type="button" id="chatMenuButton" data-bs-toggle="dropdown" aria-expanded="false">
+                <div class="btn-group ms-2">
+                    <button type="button" class="btn btn-outline-success btn-sm" id="startVoiceCall" title="Start Voice Call">
+                        <i class="fas fa-phone"></i>
+                    </button>
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="startVideoCall" title="Start Video Call">
+                        <i class="fas fa-video"></i>
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" id="chatMenuButton" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="fas fa-ellipsis-v"></i>
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="chatMenuButton">
@@ -65,13 +71,136 @@
         </div>
     </div>
     
-    <div class="col-md-4">
+    <!-- Call Modal -->
+    <div class="modal fade" id="callModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="callModalLabel">Incoming Call</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <img id="callerAvatar" src="" class="rounded-circle mb-3" width="100" height="100" alt="Caller">
+                    <h4 id="callerName">Caller Name</h4>
+                    <p id="callType" class="text-muted">Incoming Video Call</p>
+                    <div class="d-flex justify-content-center gap-3 mb-3">
+                        <button type="button" class="btn btn-success btn-lg rounded-circle" id="acceptCall">
+                            <i class="fas fa-phone"></i>
+                        </button>
+                        <button type="button" class="btn btn-danger btn-lg rounded-circle" id="rejectCall">
+                            <i class="fas fa-phone-slash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Call Controls -->
+    <div class="position-fixed bottom-0 end-0 m-3" id="callControls" style="display: none; z-index: 1050;">
+        <div class="card shadow">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0" id="callStatus">Call in progress</h6>
+                <button type="button" class="btn-close" id="minimizeCall"></button>
+            </div>
+            <div class="card-body p-2">
+                <div class="row g-2">
+                    <div class="col-12">
+                        <video id="remoteVideo" autoplay playsinline style="width: 100%; max-height: 200px; background: #000;"></video>
+                        <video id="localVideo" autoplay playsinline muted style="position: absolute; bottom: 80px; right: 20px; width: 120px; height: 90px; border: 2px solid #fff; border-radius: 8px; background: #000;"></video>
+                        <audio id="remoteAudio" autoplay playsinline style="display:none"></audio>
+                    </div>
+                    <div class="col-12 d-flex justify-content-center gap-2 mt-2">
+                        <button type="button" class="btn btn-outline-secondary btn-sm rounded-circle" id="toggleVideo" title="Toggle Video">
+                            <i class="fas fa-video"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm rounded-circle" id="toggleMute" title="Mute">
+                            <i class="fas fa-microphone"></i>
+                        </button>
+                        <button type="button" class="btn btn-danger btn-sm rounded-circle" id="endCall" title="End Call">
+                            <i class="fas fa-phone-slash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="offcanvas offcanvas-end offcanvas-lg p-3" tabindex="-1" id="infoSidebar">
+  <div class="offcanvas-header d-lg-none">
+    <h5 class="offcanvas-title">Info</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+  </div>
+  <div class="offcanvas-body p-0">
         <div class="card">
-            <div class="card-header">
-                <h6><i class="fas fa-shield-alt"></i> Encryption Status</h6>
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="fas fa-shield-alt"></i> Encryption Status</h6>
+                <div>
+                    <button class="btn btn-sm btn-outline-info me-2" id="validate-encryption-btn" title="Test encryption with {{ recipient }}">
+                        <i class="fas fa-check-circle"></i> Validate
+                    </button>
+                    <button class="btn btn-sm btn-outline-primary" id="toggle-keys-btn">
+                        <i class="fas fa-key"></i> Show My Keys
+                    </button>
+                </div>
             </div>
             <div class="card-body">
-                <div id="encryption-log" style="height: 400px; overflow-y: auto;">
+                <div id="encryption-keys" class="mb-3 d-none">
+                    <div class="mb-3">
+                        <label class="form-label small text-muted mb-1">Public Key</label>
+                        <div class="input-group mb-2">
+                            <textarea id="public-key" class="form-control font-monospace small" rows="4" readonly></textarea>
+                            <button class="btn btn-outline-secondary copy-btn" data-target="public-key" type="button" title="Copy to clipboard">
+                                <i class="far fa-copy"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <label class="form-label small text-muted mb-1">Private Key</label>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="show-private-key">
+                                <label class="form-check-label small" for="show-private-key">Show</label>
+                            </div>
+                        </div>
+                        <div class="input-group">
+                            <textarea id="private-key" class="form-control font-monospace small" rows="4" readonly></textarea>
+                            <button class="btn btn-outline-secondary copy-btn" data-target="private-key" type="button" title="Copy to clipboard">
+                                <i class="far fa-copy"></i>
+                            </button>
+                        </div>
+                        <div class="form-text text-warning small">
+                            <i class="fas fa-exclamation-triangle"></i> Keep your private key secret and never share it with anyone.
+                        </div>
+                    </div>
+                    <hr>
+                </div>
+                <div id="validation-results" class="d-none mb-3">
+                    <div class="card border-0 bg-light">
+                        <div class="card-body p-3">
+                            <h6 class="card-title d-flex justify-content-between align-items-center mb-2">
+                                <span><i class="fas fa-shield-vault"></i> Encryption Test</span>
+                                <span id="validation-status" class="badge">Testing...</span>
+                            </h6>
+                            <div id="validation-details" class="small">
+                                <div class="mb-2">
+                                    <span class="text-muted">Original:</span>
+                                    <code id="test-original" class="ms-1 text-break"></code>
+                                </div>
+                                <div class="mb-2">
+                                    <span class="text-muted">Encrypted:</span>
+                                    <code id="test-encrypted" class="ms-1 text-break small"></code>
+                                </div>
+                                <div class="mb-2">
+                                    <span class="text-muted">Decrypted:</span>
+                                    <code id="test-decrypted" class="ms-1 text-break"></code>
+                                </div>
+                                <div id="validation-message" class="mt-2"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="encryption-log" style="height: 200px; overflow-y: auto;">
                     <div class="encryption-log">
                         <i class="fas fa-info-circle"></i> Ready for secure messaging
                     </div>
@@ -97,16 +226,795 @@
             </div>
         </div>
     </div>
+  </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
+<style>
+    /* Call controls styling */
+    #callControls {
+        transition: all 0.3s ease;
+        max-width: 300px;
+    }
+    #callControls.minimized {
+        transform: translateY(calc(100% - 45px));
+    }
+    #callControls .card-header {
+        cursor: pointer;
+        background: var(--bs-primary);
+        color: white;
+    }
+    #callControls .card-body {
+        display: none;
+    }
+    #callControls:not(.minimized) .card-body {
+        display: block;
+    }
+    #localVideo {
+        transition: all 0.3s ease;
+    }
+    #localVideo.minimized {
+        width: 80px !important;
+        height: 60px !important;
+        bottom: 20px !important;
+        right: 10px !important;
+    }
+    /* Animation for incoming call */
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+        100% { transform: scale(1); }
+    }
+    .pulse-animation {
+        animation: pulse 1.5s infinite;
+    }
+    /* Call modal styling */
+    #callModal .modal-content {
+        border: none;
+        border-radius: 12px;
+        overflow: hidden;
+    }
+    #callModal .modal-header {
+        border-bottom: none;
+        justify-content: center;
+        background: var(--bs-primary);
+        color: white;
+    }
+    #callModal .btn-close {
+        position: absolute;
+        right: 1rem;
+        top: 1rem;
+        filter: invert(1) grayscale(100%) brightness(200%);
+    }
+    #callModal .btn-lg {
+        width: 60px;
+        height: 60px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+    #callModal .btn-success {
+        background-color: #28a745;
+        border-color: #28a745;
+    }
+    #callModal .btn-danger {
+        background-color: #dc3545;
+        border-color: #dc3545;
+    }
+</style>
+
 <script>
     const socket = io();
     const currentUser = '{{ user.username }}';
     const recipient = '{{ recipient }}';
+    
+    // WebRTC variables
+    let peerConnection;
+    let localStream;
+    let isCaller = false;
+    let currentCallType = '';
+    let callStartTime;
+    let callTimer;
+    let isMuted = false;
+    let isVideoOff = false;
+    let callInitiator = null;
+    
+    // Configuration for WebRTC
+    const configuration = {
+        iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' }
+        ]
+    };
+    
+    // Initialize call controls
+    function initCallControls() {
+        // Start call buttons
+        document.getElementById('startVoiceCall')?.addEventListener('click', () => startCall('voice'));
+        document.getElementById('startVideoCall')?.addEventListener('click', () => startCall('video'));
+        
+        // Call control buttons
+        document.getElementById('endCall')?.addEventListener('click', endCall);
+        document.getElementById('acceptCall')?.addEventListener('click', acceptCall);
+        document.getElementById('rejectCall')?.addEventListener('click', rejectCall);
+        
+        // Toggle buttons
+        document.getElementById('toggleMute')?.addEventListener('click', toggleMute);
+        document.getElementById('toggleVideo')?.addEventListener('click', toggleVideo);
+        document.getElementById('minimizeCall')?.addEventListener('click', toggleCallMinimize);
+    }
+    
+    // Start a new call
+    async function startCall(type) {
+        try {
+            currentCallType = type;
+            isCaller = true;
+            
+            // Get local media stream
+            const constraints = {
+                audio: true,
+                video: type === 'video' ? {
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    frameRate: { ideal: 30 }
+                } : false
+            };
+            
+            localStream = await navigator.mediaDevices.getUserMedia(constraints);
+            
+            // Display local video if it's a video call
+            if (type === 'video') {
+                const localVideo = document.getElementById('localVideo');
+                localVideo.srcObject = localStream;
+            }
+            
+            // Create peer connection
+            createPeerConnection();
+            
+            // Add local stream to peer connection
+            localStream.getTracks().forEach(track => {
+                peerConnection.addTrack(track, localStream);
+            });
+            
+            // Show call controls
+            document.getElementById('callControls').style.display = 'block';
+            document.getElementById('callStatus').textContent = `Calling ${recipient}...`;
+            
+            // Notify the callee that we want to start a call.  The actual WebRTC
+            // offer will be created *after* they accept so we don't waste ICE
+            // gathering effort if they decline.
+            socket.emit('start_call', {
+                from: currentUser,
+                to: recipient,
+                type: type
+            });
+            
+            // Start call timer
+            callStartTime = new Date();
+            updateCallTimer();
+            
+        } catch (err) {
+            console.error('Error starting call:', err);
+            alert('Could not access your camera/microphone. Please check your permissions.');
+            endCall('Failed to start call');
+        }
+    }
+    
+    // Create a new RTCPeerConnection
+    function createPeerConnection() {
+        // Close existing connection if any
+        if (peerConnection) {
+            peerConnection.close();
+        }
+        
+        // Create new peer connection
+        peerConnection = new RTCPeerConnection(configuration);
+        
+        // Handle ICE candidates
+        peerConnection.onicecandidate = (event) => {
+            if (event.candidate) {
+                console.log('Sending ICE candidate:', event.candidate);
+                socket.emit('ice_candidate', {
+                    target: isCaller ? recipient : callInitiator,
+                    candidate: event.candidate,
+                    caller: isCaller ? currentUser : callInitiator,
+                    callee: isCaller ? recipient : currentUser
+                });
+            }
+        };
+        
+        // Handle remote stream
+        peerConnection.ontrack = (event) => {
+            console.log('Received remote track:', event.track.kind, 'from stream:', event.streams[0]);
+            
+            if (event.streams && event.streams[0]) {
+                const remoteStream = event.streams[0];
+                const remoteVideo = document.getElementById('remoteVideo');
+                
+                // Set the remote stream to the video element (handles both audio and video)
+                if (remoteVideo) {
+                    remoteVideo.srcObject = remoteStream;
+                    remoteVideo.autoplay = true;
+                    remoteVideo.playsInline = true;
+                    remoteVideo.muted = false; // Important: don't mute remote audio
+                    
+                    // Ensure video plays
+                    remoteVideo.play().catch(e => {
+                        console.error('Error playing remote video:', e);
+                    });
+                    
+                    console.log('Remote stream set to video element');
+                    
+                    // Show/hide video element based on call type and video tracks
+                    const hasVideo = remoteStream.getVideoTracks().length > 0;
+                    if (currentCallType === 'video' && hasVideo) {
+                        remoteVideo.style.display = 'block';
+                    } else {
+                        remoteVideo.style.display = 'none';
+                    }
+
+                    // For voice calls or streams without video, ensure audio is attached
+                    if (!hasVideo || currentCallType === 'voice') {
+                        const remoteAudio = document.getElementById('remoteAudio');
+                        if (remoteAudio) {
+                            remoteAudio.srcObject = remoteStream;
+                            remoteAudio.autoplay = true;
+                            remoteAudio.play().catch(e => console.error('Error playing remote audio:', e));
+                        }
+                    }
+                }
+            }
+        };
+        
+        // Handle connection state changes
+        peerConnection.onconnectionstatechange = () => {
+            console.log('Connection state:', peerConnection.connectionState);
+            switch(peerConnection.connectionState) {
+                case 'connected':
+                    console.log('Peer connection established');
+                    updateCallUI('active');
+                    break;
+                case 'disconnected':
+                case 'failed':
+                    console.log('Peer connection failed or disconnected');
+                    endCall('Connection lost');
+                    break;
+                case 'closed':
+                    console.log('Peer connection closed');
+                    break;
+            }
+        };
+        
+        // Handle ICE connection state changes
+        peerConnection.oniceconnectionstatechange = () => {
+            console.log('ICE connection state:', peerConnection.iceConnectionState);
+            if (peerConnection.iceConnectionState === 'failed') {
+                console.log('ICE connection failed');
+                endCall('Connection failed');
+            }
+        };
+    }
     let messagesSent = 0;
     let messagesReceived = 0;
+    
+    // Toggle mute/unmute
+    function toggleMute() {
+        if (localStream) {
+            const audioTracks = localStream.getAudioTracks();
+            audioTracks.forEach(track => {
+                track.enabled = !track.enabled;
+            });
+            isMuted = !isMuted;
+            const icon = document.querySelector('#toggleMute i');
+            icon.className = isMuted ? 'fas fa-microphone-slash' : 'fas fa-microphone';
+        }
+    }
+    
+    // Toggle video on/off
+    function toggleVideo() {
+        if (localStream) {
+            const videoTracks = localStream.getVideoTracks();
+            if (videoTracks.length > 0) {
+                videoTracks[0].enabled = !videoTracks[0].enabled;
+                isVideoOff = !videoTracks[0].enabled;
+                const icon = document.querySelector('#toggleVideo i');
+                icon.className = isVideoOff ? 'fas fa-video-slash' : 'fas fa-video';
+            }
+        }
+    }
+    
+    // Toggle call controls minimize/expand
+    function toggleCallMinimize() {
+        const callControls = document.getElementById('callControls');
+        callControls.classList.toggle('minimized');
+    }
+    
+    // Update call timer
+    function updateCallTimer() {
+        if (callStartTime) {
+            const now = new Date();
+            const duration = Math.floor((now - callStartTime) / 1000);
+            const minutes = Math.floor(duration / 60).toString().padStart(2, '0');
+            const seconds = (duration % 60).toString().padStart(2, '0');
+            document.getElementById('callStatus').textContent = `Call in progress: ${minutes}:${seconds}`;
+            callTimer = setTimeout(updateCallTimer, 1000);
+        }
+    }
+    
+    // Accept an incoming call
+    async function acceptCall() {
+        try {
+            const callModal = bootstrap.Modal.getInstance(document.getElementById('callModal'));
+            callModal.hide();
+            
+            // Get local media stream
+            const constraints = {
+                audio: true,
+                video: currentCallType === 'video' ? {
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    frameRate: { ideal: 30 }
+                } : false
+            };
+            
+            localStream = await navigator.mediaDevices.getUserMedia(constraints);
+            
+            // Display local video if it's a video call
+            if (currentCallType === 'video') {
+                const localVideo = document.getElementById('localVideo');
+                localVideo.srcObject = localStream;
+            }
+            
+            // Create peer connection
+            createPeerConnection();
+            
+            // Add local stream to peer connection
+            localStream.getTracks().forEach(track => {
+                peerConnection.addTrack(track, localStream);
+            });
+            
+            // Show call controls
+            document.getElementById('callControls').style.display = 'block';
+            document.getElementById('callStatus').textContent = `In call with ${callInitiator}`;
+            
+            // Notify the caller that the call was accepted
+            socket.emit('accept_call', {
+                caller: callInitiator,
+                callee: currentUser
+            });
+            
+            // Start call timer
+            callStartTime = new Date();
+            updateCallTimer();
+            
+        } catch (err) {
+            console.error('Error accepting call:', err);
+            alert('Could not access your camera/microphone. Please check your permissions.');
+            rejectCall();
+        }
+    }
+    
+    // Reject an incoming call
+    function rejectCall() {
+        const callModal = bootstrap.Modal.getInstance(document.getElementById('callModal'));
+        callModal.hide();
+        
+        // Notify the caller that the call was rejected
+        socket.emit('reject_call', {
+            caller: callInitiator,
+            callee: currentUser,
+            reason: 'rejected'
+        });
+        
+        // Reset call state
+        callInitiator = null;
+        currentCallType = '';
+    }
+    
+    // End the current call
+    function endCall(reason = 'Call ended', fromRemote = false) {
+        console.log('Ending call with reason:', reason, 'fromRemote:', fromRemote);
+        
+        // If we're already in the process of ending the call, don't do it again
+        if (window.endingCall) {
+            console.log('Call termination already in progress');
+            return;
+        }
+        
+        window.endingCall = true;
+        
+        try {
+            // Stop local stream
+            if (localStream) {
+                console.log('Stopping local stream tracks');
+                localStream.getTracks().forEach(track => {
+                    try {
+                        track.stop();
+                        track.enabled = false;
+                    } catch (e) {
+                        console.error('Error stopping track:', e);
+                    }
+                });
+                localStream = null;
+            }
+            
+            // Close peer connection
+            if (peerConnection) {
+                console.log('Closing peer connection');
+                // Remove all event listeners to prevent memory leaks
+                peerConnection.ontrack = null;
+                peerConnection.onicecandidate = null;
+                peerConnection.oniceconnectionstatechange = null;
+                peerConnection.onsignalingstatechange = null;
+                peerConnection.onicegatheringstatechange = null;
+                peerConnection.onconnectionstatechange = null;
+                
+                // Close connection
+                try {
+                    const senders = peerConnection.getSenders ? peerConnection.getSenders() : [];
+                    senders.forEach(sender => {
+                        if (sender.track) {
+                            try {
+                                sender.track.stop();
+                            } catch (e) {
+                                console.error('Error stopping sender track:', e);
+                            }
+                        }
+                    });
+                } catch (e) {
+                    console.error('Error getting senders:', e);
+                }
+                
+                try {
+                    peerConnection.close();
+                } catch (e) {
+                    console.error('Error closing peer connection:', e);
+                } finally {
+                    peerConnection = null;
+                }
+            }
+            
+            // Clear timer
+            if (callTimer) {
+                console.log('Clearing call timer');
+                clearTimeout(callTimer);
+                callTimer = null;
+            }
+            
+            // Reset video elements
+            const remoteVideo = document.getElementById('remoteVideo');
+            const localVideo = document.getElementById('localVideo');
+            
+            if (remoteVideo) {
+                try {
+                    remoteVideo.srcObject = null;
+                    remoteVideo.pause();
+                } catch (e) {
+                    console.error('Error resetting remote video:', e);
+                }
+            }
+            
+            if (localVideo) {
+                try {
+                    localVideo.srcObject = null;
+                    localVideo.pause();
+                } catch (e) {
+                    console.error('Error resetting local video:', e);
+                }
+            }
+            
+            // Hide call controls
+            const callControls = document.getElementById('callControls');
+            if (callControls) {
+                callControls.style.display = 'none';
+            }
+            
+            // Notify the other peer if we're in a call and this is a local end call
+            if (!fromRemote && (isCaller || callInitiator) && (recipient || callInitiator)) {
+                const targetUser = isCaller ? recipient : callInitiator;
+                console.log('Notifying peer of call end:', targetUser);
+                
+                socket.emit('end_call', {
+                    caller: isCaller ? currentUser : callInitiator,
+                    callee: targetUser,
+                    reason: reason,
+                    timestamp: new Date().toISOString()
+                });
+            }
+            
+            // Reset call state
+            isCaller = false;
+            currentCallType = '';
+            callStartTime = null;
+            callInitiator = null;
+            
+            // Close any open call modal
+            const callModal = bootstrap.Modal.getInstance(document.getElementById('callModal'));
+            if (callModal) {
+                callModal.hide();
+            }
+            
+            // Show notification
+            if (reason && reason !== 'Call ended') {
+                console.log('Call ended:', reason);
+                try {
+                    if (Notification.permission === 'granted') {
+                        new Notification('Call ended', {
+                            body: reason,
+                            icon: '/static/favicon.ico'
+                        });
+                    }
+                } catch (e) {
+                    console.error('Error showing notification:', e);
+                }
+            }
+            
+            // Update UI
+            updateCallUI('ended');
+            
+            console.log('Call cleanup complete');
+            
+        } catch (e) {
+            console.error('Error during call cleanup:', e);
+        } finally {
+            window.endingCall = false;
+        }
+    }
+    
+    // Initialize call controls when the page loads
+    document.addEventListener('DOMContentLoaded', () => {
+        initCallControls();
+    });
+    
+    // WebRTC signaling event handlers
+    socket.on('incoming_call', (data) => {
+        callInitiator = data.from;
+        currentCallType = data.type;
+        
+        // Show call modal
+        const callModal = new bootstrap.Modal(document.getElementById('callModal'));
+        document.getElementById('callerName').textContent = callInitiator;
+        document.getElementById('callType').textContent = `Incoming ${data.type} Call`;
+        document.getElementById('callerAvatar').src = data.caller_avatar || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(callInitiator) + '&background=random';
+        
+        callModal.show();
+        
+        // Auto-reject after 30 seconds if not answered
+        setTimeout(() => {
+            if (document.getElementById('callModal').classList.contains('show')) {
+                rejectCall();
+                callModal.hide();
+            }
+        }, 30000);
+    });
+    
+    socket.on('call_accepted', async (data) => {
+        console.log('Call accepted by peer');
+        document.getElementById('callStatus').textContent = `In call with ${recipient}`;
+        
+        try {
+            if (isCaller && peerConnection) {
+                console.log('Creating WebRTC offer after acceptance');
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+                
+                console.log('Sending WebRTC offer');
+                socket.emit('webrtc_offer', {
+                    target: recipient,
+                    caller: currentUser,
+                    callee: recipient,
+                    sdp: offer.sdp
+                });
+            }
+        } catch (err) {
+            console.error('Error creating / sending offer:', err);
+            endCall('Connection error');
+        }
+    });
+    
+    socket.on('call_rejected', (data) => {
+        alert(`${data.callee} rejected your call`);
+        endCall('Call rejected');
+    });
+    
+    socket.on('call_ended', (data) => {
+        const reason = data.reason || 'Call ended by peer';
+        const endedBy = data.ended_by || 'peer';
+        console.log('Received call_ended event:', { reason, endedBy, data });
+        
+        // Only show a notification if we didn't initiate the call end
+        if (endedBy !== currentUser) {
+            try {
+                if (Notification.permission === 'granted') {
+                    const notification = new Notification('Call ended', {
+                        body: reason,
+                        icon: '/static/favicon.ico'
+                    });
+                    
+                    // Close the notification after 5 seconds
+                    setTimeout(() => {
+                        try { notification.close(); } catch (e) {}
+                    }, 5000);
+                }
+            } catch (e) {
+                console.error('Error showing notification:', e);
+            }
+        }
+        
+        // End the call with the reason
+        endCall(reason, true);
+        
+        // Update the UI
+        updateCallUI('ended');
+        
+        // If there's a call modal open, close it
+        try {
+            const callModal = bootstrap.Modal.getInstance(document.getElementById('callModal'));
+            if (callModal) {
+                callModal.hide();
+            }
+        } catch (e) {
+            console.error('Error closing call modal:', e);
+        }
+        
+        console.log('Call ended:', { reason, endedBy });
+    });
+    
+    socket.on('webrtc_offer', async (data) => {
+        try {
+            console.log('Received WebRTC offer from:', data.caller);
+            
+            if (!peerConnection) {
+                createPeerConnection();
+            }
+            
+            // Set remote description
+            await peerConnection.setRemoteDescription(new RTCSessionDescription({
+                type: 'offer',
+                sdp: data.sdp
+            }));
+            
+            console.log('Remote description set, creating answer');
+            
+            // Create and send answer
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+            
+            console.log('Sending WebRTC answer to:', data.caller);
+            
+            socket.emit('webrtc_answer', {
+                target: data.caller,
+                caller: currentUser,
+                callee: data.caller,
+                sdp: answer.sdp
+            });
+            
+        } catch (err) {
+            console.error('Error handling WebRTC offer:', err);
+            endCall('Error establishing connection');
+        }
+    });
+    
+    socket.on('webrtc_answer', async (data) => {
+        try {
+            console.log('Received WebRTC answer from:', data.caller);
+            
+            if (peerConnection) {
+                await peerConnection.setRemoteDescription(new RTCSessionDescription({
+                    type: 'answer',
+                    sdp: data.sdp
+                }));
+                
+                console.log('Remote description set from answer');
+            }
+        } catch (err) {
+            console.error('Error handling WebRTC answer:', err);
+            endCall('Error establishing connection');
+        }
+    });
+    
+    socket.on('ice_candidate', async (data) => {
+        try {
+            console.log('Received ICE candidate:', data.candidate);
+            
+            if (peerConnection && peerConnection.remoteDescription) {
+                await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+                console.log('ICE candidate added successfully');
+            } else {
+                console.log('Peer connection not ready for ICE candidate, queuing...');
+                // You might want to queue candidates here if needed
+            }
+        } catch (err) {
+            console.error('Error adding ICE candidate:', err);
+        }
+    });
+    
+    // Utility function to handle media device errors
+    function handleMediaError(error) {
+        console.error('Media error:', error);
+        let errorMessage = 'Error accessing media devices. ';
+        
+        if (error.name === 'NotAllowedError') {
+            errorMessage += 'Please allow camera/microphone access to make calls.';
+        } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+            errorMessage += 'Required media devices not found. Please check your camera/microphone.';
+        } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
+            errorMessage += 'Could not start video/audio. The device may be in use by another application.';
+        } else if (error.name === 'OverconstrainedError' || error.name === 'ConstraintNotSatisfiedError') {
+            errorMessage += 'Constraints could not be satisfied by available devices.';
+        } else if (error.name === 'TypeError') {
+            errorMessage += 'Invalid constraints specified.';
+        } else {
+            errorMessage += error.message || 'Unknown error occurred.';
+        }
+        
+        alert(errorMessage);
+        endCall('Media error: ' + errorMessage);
+        return errorMessage;
+    }
+    
+    // Function to check media device permissions
+    async function checkMediaPermissions() {
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const hasAudio = devices.some(device => device.kind === 'audioinput');
+            const hasVideo = devices.some(device => device.kind === 'videoinput');
+            
+            if (!hasAudio) {
+                throw new Error('No audio input devices found');
+            }
+            
+            return { hasAudio, hasVideo };
+        } catch (err) {
+            console.error('Error checking media devices:', err);
+            handleMediaError(err);
+            throw err;
+        }
+    }
+    
+    // Function to handle call timeouts
+    function setupCallTimeout(timeout = 30000) {
+        return setTimeout(() => {
+            if (peerConnection && peerConnection.connectionState !== 'connected') {
+                endCall('Call timed out');
+                alert('Call timed out. The other party did not respond.');
+            }
+        }, timeout);
+    }
+    
+    // Update UI based on call state
+    function updateCallUI(state) {
+        const callControls = document.getElementById('callControls');
+        const callStatus = document.getElementById('callStatus');
+        const startCallButtons = document.querySelectorAll('#startVoiceCall, #startVideoCall');
+        
+        switch(state) {
+            case 'starting':
+                callStatus.textContent = 'Connecting...';
+                startCallButtons.forEach(btn => btn.disabled = true);
+                break;
+                
+            case 'active':
+                callStatus.textContent = `In call with ${isCaller ? recipient : callInitiator}`;
+                callControls.style.display = 'block';
+                startCallButtons.forEach(btn => btn.disabled = true);
+                break;
+                
+            case 'ended':
+                callStatus.textContent = 'Call ended';
+                callControls.style.display = 'none';
+                startCallButtons.forEach(btn => btn.disabled = false);
+                break;
+                
+            case 'error':
+                callStatus.textContent = 'Call failed';
+                callControls.style.display = 'none';
+                startCallButtons.forEach(btn => btn.disabled = false);
+                break;
+        }
+    }
     
     // DOM elements
     const messageForm = document.getElementById('message-form');
@@ -290,14 +1198,14 @@
         messageId = messageId || generateMessageId();
         const isSent = type === 'sent';
         const messageElement = document.createElement('div');
-        messageElement.className = `message ${type}`;
+        messageElement.className = `d-flex ${isSent ? 'justify-content-end' : 'justify-content-start'}`;
         messageElement.setAttribute('data-message-id', messageId);
         
         const messageContent = document.createElement('div');
-        messageContent.className = 'message-content-wrapper';
+        messageContent.className = `bubble ${isSent ? 'outgoing' : 'incoming'}`;
         
         const senderElement = document.createElement('div');
-        senderElement.className = 'message-sender';
+        senderElement.className = 'message-sender d-none';
         senderElement.textContent = sender + ':';
         
         const contentElement = document.createElement('div');
@@ -735,6 +1643,183 @@
     
     socket.on('disconnect', function() {
         addEncryptionLog('🔌 Disconnected from server', 'warning');
+    });
+
+    // Toggle keys visibility
+    const toggleKeysBtn = document.getElementById('toggle-keys-btn');
+    const encryptionKeysSection = document.getElementById('encryption-keys');
+    const showPrivateKeyCheckbox = document.getElementById('show-private-key');
+    const privateKeyTextarea = document.getElementById('private-key');
+    const validateBtn = document.getElementById('validate-encryption-btn');
+    const validationResults = document.getElementById('validation-results');
+    const validationStatus = document.getElementById('validation-status');
+    const validationMessage = document.getElementById('validation-message');
+    
+    // Toggle keys section
+    toggleKeysBtn?.addEventListener('click', async () => {
+        const isHidden = encryptionKeysSection.classList.toggle('d-none');
+        
+        if (!isHidden && !encryptionKeysSection.dataset.loaded) {
+            try {
+                // Show loading state
+                toggleKeysBtn.disabled = true;
+                toggleKeysBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading keys...';
+                
+                // Fetch keys from server
+                const response = await fetch('/api/keys');
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Display public key
+                    document.getElementById('public-key').value = data.public_key;
+                    
+                    // Display private key (initially hidden)
+                    privateKeyTextarea.value = data.private_key;
+                    
+                    // Mark as loaded
+                    encryptionKeysSection.dataset.loaded = 'true';
+                    
+                    // Update button text
+                    toggleKeysBtn.innerHTML = '<i class="fas fa-key"></i> Hide My Keys';
+                    
+                    // Add encryption log
+                    addEncryptionLog('🔑 Encryption keys loaded', 'success');
+                } else {
+                    throw new Error(data.message || 'Failed to load keys');
+                }
+            } catch (error) {
+                console.error('Error loading keys:', error);
+                addEncryptionLog('❌ Failed to load encryption keys', 'danger');
+                // Hide the keys section on error
+                encryptionKeysSection.classList.add('d-none');
+            } finally {
+                toggleKeysBtn.disabled = false;
+                if (encryptionKeysSection.classList.contains('d-none')) {
+                    toggleKeysBtn.innerHTML = '<i class="fas fa-key"></i> Show My Keys';
+                }
+            }
+        } else {
+            // Toggle button text
+            toggleKeysBtn.innerHTML = isHidden ? 
+                '<i class="fas fa-key"></i> Show My Keys' : 
+                '<i class="fas fa-key"></i> Hide My Keys';
+        }
+    });
+    
+    // Toggle private key visibility
+    showPrivateKeyCheckbox?.addEventListener('change', (e) => {
+        privateKeyTextarea.type = e.target.checked ? 'text' : 'password';
+    });
+    
+    // Handle encryption validation
+    validateBtn?.addEventListener('click', async () => {
+        if (!validateBtn.classList.contains('disabled')) {
+            try {
+                // Show loading state
+                validateBtn.classList.add('disabled');
+                validateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
+                
+                // Show validation section
+                validationResults.classList.remove('d-none');
+                validationStatus.textContent = 'Testing...';
+                validationStatus.className = 'badge bg-secondary';
+                
+                // Generate a random test message
+                const testMessage = `Test message ${Math.random().toString(36).substring(2, 8)}`;
+                
+                // Call the validation endpoint
+                const response = await fetch('/api/validate-encryption', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        recipient: '{{ recipient }}',
+                        message: testMessage
+                    })
+                });
+                
+                const data = await response.json();
+                
+                // Update UI with results
+                document.getElementById('test-original').textContent = data.original_message || testMessage;
+                document.getElementById('test-encrypted').textContent = data.encrypted_message || 'Error';
+                document.getElementById('test-decrypted').textContent = data.decrypted_message || 'Error';
+                
+                if (data.success && data.validation_passed) {
+                    validationStatus.textContent = 'Success';
+                    validationStatus.className = 'badge bg-success';
+                    validationMessage.innerHTML = `
+                        <div class="alert alert-success p-2 mb-0">
+                            <i class="fas fa-check-circle me-1"></i>
+                            Message successfully encrypted with {{ recipient }}'s public key and decrypted with their private key.
+                        </div>`;
+                    addEncryptionLog('✅ Encryption test passed successfully', 'success');
+                } else {
+                    validationStatus.textContent = 'Failed';
+                    validationStatus.className = 'badge bg-danger';
+                    validationMessage.innerHTML = `
+                        <div class="alert alert-danger p-2 mb-0">
+                            <i class="fas fa-exclamation-triangle me-1"></i>
+                            ${data.message || 'Encryption validation failed. The message could not be decrypted correctly.'}
+                        </div>`;
+                    addEncryptionLog('❌ Encryption test failed: ' + (data.message || 'Unknown error'), 'danger');
+                }
+                
+            } catch (error) {
+                console.error('Validation error:', error);
+                validationStatus.textContent = 'Error';
+                validationStatus.className = 'badge bg-danger';
+                validationMessage.innerHTML = `
+                    <div class="alert alert-danger p-2 mb-0">
+                        <i class="fas fa-exclamation-triangle me-1"></i>
+                        An error occurred during validation. Please check the console for details.
+                    </div>`;
+                addEncryptionLog('❌ Error during encryption test', 'danger');
+            } finally {
+                // Reset button state
+                validateBtn.classList.remove('disabled');
+                validateBtn.innerHTML = '<i class="fas fa-check-circle"></i> Validate';
+                
+                // Scroll to show results
+                validationResults.scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+    });
+    
+    // Copy to clipboard functionality
+    document.querySelectorAll('.copy-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const targetId = btn.getAttribute('data-target');
+            const targetElement = document.getElementById(targetId);
+            
+            if (targetElement) {
+                // Select the text
+                targetElement.select();
+                
+                try {
+                    // Copy to clipboard
+                    document.execCommand('copy');
+                    
+                    // Show feedback
+                    const originalText = btn.innerHTML;
+                    btn.innerHTML = '<i class="fas fa-check"></i>';
+                    btn.classList.add('text-success');
+                    
+                    // Reset after 2 seconds
+                    setTimeout(() => {
+                        btn.innerHTML = originalText;
+                        btn.classList.remove('text-success');
+                    }, 2000);
+                    
+                    // Add log
+                    addEncryptionLog(`📋 ${targetId === 'public-key' ? 'Public' : 'Private'} key copied to clipboard`, 'info');
+                } catch (err) {
+                    console.error('Failed to copy text:', err);
+                    addEncryptionLog('❌ Failed to copy to clipboard', 'danger');
+                }
+            }
+        });
     });
 </script>
 {% endblock %}
