@@ -185,6 +185,16 @@
                     <h6 class="mb-3">Quick Actions</h6>
                     <div class="row g-3 mb-4">
                         <div class="col-6 col-md-3">
+                            <a href="#" class="card bg-light-subtle border-0 text-center p-3 h-100 text-decoration-none text-dark" data-bs-toggle="modal" data-bs-target="#inviteModal" id="inviteCard">
+                                <div class="avatar-sm mx-auto mb-2">
+                                    <div class="avatar-title bg-soft-primary text-primary rounded-3">
+                                        <i class="fas fa-envelope"></i>
+                                    </div>
+                                </div>
+                                <h6 class="mb-0">Invite Friend</h6>
+                            </a>
+                        </div>
+                        <div class="col-6 col-md-3">
                             <a href="#" class="card bg-light-subtle border-0 text-center p-3 h-100 text-decoration-none text-dark">
                                 <div class="avatar-sm mx-auto mb-2">
                                     <div class="avatar-title bg-soft-success text-success rounded-3">
@@ -215,6 +225,7 @@
                             </a>
                         </div>
                     </div>
+
 
                     <!-- Recent Activity -->
                     <div class="mt-4">
@@ -269,7 +280,7 @@
 <script>
     // Global variables
     const currentUser = '{{ user.username }}';
-    let socket;
+    // use global socket from base.html
     
     document.addEventListener('DOMContentLoaded', function() {
         // Initialize tooltips
@@ -285,7 +296,7 @@
         });
         
         // Initialize socket connection
-        socket = io();
+
         
         // Handle initial list of online users
         socket.on('online_users', function(data) {
@@ -406,6 +417,36 @@
           })
           .catch(err => console.error('Error:', err));
         
+        // Invite form submit
+        document.getElementById('inviteForm').addEventListener('submit', function(e){
+          e.preventDefault();
+          const email = document.getElementById('inviteEmail').value.trim();
+          const alertBox = document.getElementById('inviteAlert');
+          const spinner = document.getElementById('inviteSpinner');
+          if(!email){return;}
+          spinner.classList.remove('d-none');
+          fetch('/api/invite', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({email})
+          }).then(r=>r.json()).then(data=>{
+            spinner.classList.add('d-none');
+            alertBox.classList.remove('d-none','alert-danger','alert-success');
+            if(data.success){
+              alertBox.classList.add('alert-success');
+              alertBox.textContent = data.message;
+            }else{
+              alertBox.classList.add('alert-danger');
+              alertBox.textContent = data.message || 'Failed to send invite';
+            }
+          }).catch(err=>{
+            spinner.classList.add('d-none');
+            alertBox.classList.remove('d-none');
+            alertBox.classList.add('alert-danger');
+            alertBox.textContent = 'Error sending invite';
+          });
+        });
+
         // Initialize clipboard for invite link
         const inviteLink = `${window.location.origin}/register?ref=${currentUser}`;
         const copyInviteBtn = document.getElementById('copyInviteLink');
@@ -509,4 +550,32 @@
         }
     });
 </script>
+
+<!-- Invite Friend Modal -->
+<div class="modal fade" id="inviteModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Invite a Friend</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form id="inviteForm">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="inviteEmail" class="form-label">Friend's email</label>
+            <input type="email" class="form-control" id="inviteEmail" placeholder="name@example.com" required>
+          </div>
+          <div id="inviteAlert" class="alert d-none" role="alert"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          <button type="submit" class="btn btn-primary" id="sendInviteBtn">
+            <span class="spinner-border spinner-border-sm d-none" id="inviteSpinner"></span>
+            Send Invite
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 {% endblock %}
