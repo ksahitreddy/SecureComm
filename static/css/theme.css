@@ -41,14 +41,16 @@ body {
 
 /* Chat bubbles */
 .bubble {
-  max-width: 80%;
-  padding: .6rem 1rem;
+  max-width: 70%;
+  padding: .5rem .85rem;
   border-radius: var(--radius);
   box-shadow: var(--shadow-sm);
   position: relative;
+  margin-bottom: 4px;
 }
 .bubble.incoming {background: #ffffff; color:#1e293b; align-self:flex-start;}
 .bubble.outgoing {background: var(--primary); color:#fff; align-self:flex-end;}
+
 
 /* Tail pseudo-elements */
 .bubble.incoming::before, .bubble.outgoing::before {
