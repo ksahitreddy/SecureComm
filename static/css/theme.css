@@ -1,0 +1,72 @@
+/* Global theme variables and utility classes */
+:root {
+  --primary: #6366f1; /* indigo-500 */
+  --primary-dark: #4f46e5; /* indigo-600 */
+  --secondary: #f8fafc; /* slate-50 */
+  --radius: 0.75rem;
+  --shadow-sm: 0 2px 4px rgba(0,0,0,.06);
+  --shadow: 0 4px 12px rgba(0,0,0,.1);
+  --transition: all .3s ease;
+}
+
+body {
+  background-color: var(--secondary);
+  font-family: 'Poppins', sans-serif;
+}
+
+.card,
+.offcanvas,
+.modal-content {
+  border-radius: var(--radius) !important;
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-primary {
+  background-color: var(--primary);
+  border-color: var(--primary);
+}
+.btn-primary:hover {
+  background-color: var(--primary-dark);
+  border-color: var(--primary-dark);
+}
+
+/* Fade / slide utility animations */
+@keyframes fadeInUp {
+  from {opacity:0; transform: translate3d(0, 20px, 0);} 
+  to {opacity:1; transform:none;}
+}
+.animate-fadeInUp {
+  animation: fadeInUp .6s ease both;
+}
+
+/* Chat bubbles */
+.bubble {
+  max-width: 80%;
+  padding: .6rem 1rem;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  position: relative;
+}
+.bubble.incoming {background: #ffffff; color:#1e293b; align-self:flex-start;}
+.bubble.outgoing {background: var(--primary); color:#fff; align-self:flex-end;}
+
+/* Tail pseudo-elements */
+.bubble.incoming::before, .bubble.outgoing::before {
+  content:"";
+  position:absolute;
+  bottom:0;
+  width:10px; height:10px;
+  background:inherit;
+}
+.bubble.incoming::before {left:-5px; clip-path:polygon(0 0, 100% 0, 0 100%);}
+.bubble.outgoing::before {right:-5px; clip-path:polygon(100% 0, 100% 100%, 0 100%);} 
+
+/* Pulse for unread badge */
+@keyframes pulse {
+  0% {box-shadow:0 0 0 0 rgba(99,102,241,.45);} 
+  70% {box-shadow:0 0 0 8px rgba(99,102,241,0);} 
+  100% {box-shadow:0 0 0 0 rgba(99,102,241,0);} 
+}
+.badge-pulse {
+  animation:pulse 1.5s infinite;
+}
