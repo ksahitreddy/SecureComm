@@ -27,6 +27,7 @@ from cryptography.hazmat.backends import default_backend
 import secrets
 import re
 import mimetypes
+from flask_mail import Mail, Message
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -43,6 +44,16 @@ app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
 
 # Initialize SocketIO with CORS support
 socketio = SocketIO(app, cors_allowed_origins="*", logger=True, engineio_logger=True)
+
+# ---------------- Mail configuration ----------------
+app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
+app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', 587))
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME', 'iliketrainshm59@gmail.com')
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', 'jwsm rlev xbqs iywp')
+app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER', 'iliketrainshm59@gmail.com')
+
+mail = Mail(app)
 
 # MongoDB Configuration
 MONGO_URI = os.environ.get('MONGO_URI', 'mongodb+srv://admins:4postr0phe@stock.sxr4y.mongodb.net/securecomm_db?retryWrites=true&w=majority&appName=Stock')
@@ -617,6 +628,37 @@ def get_user_keys():
     except Exception as e:
         logger.error(f"Error fetching user keys: {e}", exc_info=True)
         return jsonify({'success': False, 'message': 'Failed to fetch keys'}), 500
+
+# ------------------------------
+# Invite friend endpoint
+# ------------------------------
+@app.route('/api/invite', methods=['POST'])
+@login_required
+def invite_friend():
+    """Send invitation email to provided address"""
+    data = request.get_json(silent=True) or {}
+    recipient_email = data.get('email')
+    if not recipient_email:
+        return jsonify({'success': False, 'message': 'Email is required'}), 400
+
+    try:
+        invite_link = f"{request.host_url.rstrip('/')}/register"
+        html_body = f"""
+        <p>Hello!</p>
+        <p>You have been invited to join SecureComm.</p>
+        <p><a href='{invite_link}'>Click here to register</a></p>
+        <p>Welcome aboard!<br>Sahit and Hemanth</p>
+        """
+        plain_text_body = (
+            "Hello!\n\nYou have been invited to join SecureComm.\n\n"
+            f"Please register at {invite_link}\n\nWelcome aboard!\n\nSahit and Hemanth"
+        )
+        msg = Message(subject='Join me on SecureComm', recipients=[recipient_email], body=plain_text_body, html=html_body)
+        mail.send(msg)
+        return jsonify({'success': True, 'message': f'Email sent to {recipient_email}'})
+    except Exception as e:
+        logger.error(f'Error sending invite email: {e}', exc_info=True)
+        return jsonify({'success': False, 'message': 'Failed to send email'}), 500
 
 # ------------------------------
 # Dashboard stats endpoint
