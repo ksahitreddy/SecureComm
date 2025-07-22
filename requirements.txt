@@ -9,3 +9,4 @@ eventlet
 Werkzeug
 bcrypt
 flask_pymongo
+flask-mail
