@@ -618,6 +618,56 @@ def get_user_keys():
         logger.error(f"Error fetching user keys: {e}", exc_info=True)
         return jsonify({'success': False, 'message': 'Failed to fetch keys'}), 500
 
+# ------------------------------
+# Dashboard stats endpoint
+# ------------------------------
+@app.route('/api/dashboard/stats')
+@login_required
+def dashboard_stats():
+    """Return total messages and contacts counts for current user"""
+    try:
+        username = session['username']
+
+        # Total messages involving current user
+        total_messages = _db['messages'].count_documents({
+            '$or': [
+                {'sender': username},
+                {'recipient': username}
+            ]
+        })
+
+        # Distinct contacts user has chatted with
+        contacts_cursor = _db['messages'].aggregate([
+            {'$match': {
+                '$or': [
+                    {'sender': username},
+                    {'recipient': username}
+                ]
+            }},
+            {'$project': {
+                'contact': {
+                    '$cond': [
+                        {'$eq': ['$sender', username]},
+                        '$recipient',
+                        '$sender'
+                    ]
+                }
+            }},
+            {'$group': {'_id': '$contact'}}
+        ])
+
+        total_contacts = len(list(contacts_cursor))
+
+        return jsonify({
+            'success': True,
+            'total_messages': total_messages,
+            'total_contacts': total_contacts
+        })
+
+    except Exception as e:
+        logger.error(f"Error fetching dashboard stats: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': 'Failed to load stats'}), 500
+
 
 @app.route('/api/validate-encryption', methods=['POST'])
 @login_required
