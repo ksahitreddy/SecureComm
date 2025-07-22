@@ -13,6 +13,8 @@
     
     <!-- Bootstrap 5.3 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Custom Theme -->
+    <link href="{{ url_for('static', filename='css/theme.css') }}" rel="stylesheet">
     
     <!-- Font Awesome 6 -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
@@ -459,25 +461,51 @@
         </div>
     </nav>
 
-    <div class="container mt-4">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ 'danger' if category == 'error' else 'success' if category == 'success' else 'info' }} alert-dismissible fade show" role="alert">
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    </div>
-                {% endfor %}
+    <!-- Toast notifications -->
+    {% with messages = get_flashed_messages(with_categories=True) %}
+    {% if messages %}
+    <div class="toast-container position-fixed top-0 end-0 p-3" id="toastContainer">
+        {% for m in messages %}
+            {% if m is sequence and m|length == 2 %}
+                {% set category, msg = m %}
+            {% else %}
+                {% set category = 'info' %}
+                {% set msg = m %}
             {% endif %}
-        {% endwith %}
+            {% set bs_class = 'success' if category in ['success','ok'] else 'danger' if category in ['error','danger'] else 'warning' if category=='warning' else 'info' %}
+            <div class="toast text-bg-{{ bs_class }} border-0 shadow-sm" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="5000">
+                <div class="d-flex">
+                    <div class="toast-body">
+                        {{ msg }}
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    <div class="container mt-4">
+        {% with messages = get_flashed_messages(with_categories=True) %}
+        {% if messages %}
+          {% for m in messages %}
+            {% if m is sequence and m|length == 2 %}
+              {% set category, msg = m %}
+            {% else %}
+              {% set category = 'info' %}
+              {% set msg = m %}
+            {% endif %}
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
 
         {% block content %}{% endblock %}
     </div>
-
     <!-- Footer -->
     <footer class="mt-auto py-4 text-center text-muted">
         <div class="container">
-            <p class="mb-0"> 2025 SecureComm. Created by Sahit and Hemanth</p>
+            <p class="mb-0"> 2023 SecureComm</p>
             <small>End-to-end encrypted messaging for everyone</small>
         </div>
     </footer>
@@ -537,14 +565,12 @@
             });
         });
         
-        // Auto-hide alerts after 5 seconds
+        // Initialize and show all toasts
         document.addEventListener('DOMContentLoaded', function() {
-            const alerts = document.querySelectorAll('.alert');
-            alerts.forEach(alert => {
-                setTimeout(() => {
-                    const bsAlert = new bootstrap.Alert(alert);
-                    bsAlert.close();
-                }, 5000);
+            const toastElList = [].slice.call(document.querySelectorAll('.toast'));
+            toastElList.forEach(function(toastEl) {
+                const toast = new bootstrap.Toast(toastEl);
+                toast.show();
             });
         });
         
