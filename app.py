@@ -1603,4 +1603,4 @@ def not_found_error(error):
 
 if __name__ == '__main__':
     # Run with TLS in production
-    socketio.run(app, debug=True, host='0.0.0.0', port=5000)
+    socketio.run(app, debug=True, host='0.0.0.0', port=5000, certfile='cert.pem', keyfile='key.pem')
