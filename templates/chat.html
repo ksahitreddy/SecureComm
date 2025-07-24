@@ -51,7 +51,7 @@
                                 <i class="fas fa-paperclip"></i>
                             </button>
                         </div>
-                        <input type="text" id="message-input" class="form-control" placeholder="Type your message..." autocomplete="off">
+                        <textarea id="message-input" class="form-control" placeholder="Type your message..." rows="1" style="resize: none;"></textarea>
                         <button class="btn btn-primary" type="button" id="send-button">
                             <i class="fas fa-paper-plane"></i> Send
                         </button>
@@ -104,7 +104,7 @@
             <div class="card-body p-2">
                 <div class="row g-2">
                     <div class="col-12">
-                        <video id="remoteVideo" autoplay playsinline style="width: 100%; max-height: 700px; background: #000; border-radius: 8px;"></video>
+                        <video id="remoteVideo" autoplay playsinline style="width: 100%; max-height: 350px; background: #000; border-radius: 8px;"></video>
                         <video id="localVideo" autoplay playsinline muted style="position: absolute; bottom: 80px; right: 20px; width: 120px; height: 90px; border: 2px solid #fff; border-radius: 8px; background: #000;"></video>
                         <audio id="remoteAudio" autoplay playsinline style="display:none"></audio>
                     </div>
@@ -1031,6 +1031,11 @@
     const messageForm = document.getElementById('message-form');
     const messageInput = document.getElementById('message-input');
     const messageList = document.getElementById('message-list');
+// auto-grow textarea height
+messageInput.addEventListener('input', () => {
+    messageInput.style.height = 'auto';
+    messageInput.style.height = messageInput.scrollHeight + 'px';
+});
     const encryptionLog = document.getElementById('encryption-log');
     const chatContainer = document.getElementById('chat-messages');
     
@@ -1041,25 +1046,27 @@
     });
     
     // Handle Enter key in message input
-    document.getElementById('message-input').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
+    document.getElementById('message-input').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
-            const message = this.value.trim();
-            if (message) {
-                sendMessage(message);
+            const msg = this.value.trim();
+            if (msg) {
+                sendMessage(msg);
                 this.value = '';
+                this.style.height = 'auto';
             }
         }
     });
-    
-    // Handle send message button click
-    document.getElementById('send-button').addEventListener('click', function() {
-        const messageInput = document.getElementById('message-input');
-        const message = messageInput.value.trim();
-        
-        if (message) {
-            sendMessage(message);
-            messageInput.value = '';
+
+// Handle send message button click
+document.getElementById('send-button').addEventListener('click', function() {
+    const messageInput = document.getElementById('message-input');
+    const message = messageInput.value.trim();
+
+    if (message) {
+        sendMessage(message);
+        messageInput.value = '';
+        messageInput.style.height = 'auto';
         }
     });
     
@@ -1226,7 +1233,27 @@
         if (isFile) {
             contentElement.innerHTML = content; // safe because server already sanitized the link
         } else if (isPlaintext) {
-            contentElement.textContent = content;
+            const codeMatch = content.trim().match(/^@\.(\w+)\s([\s\S]*)/);
+            if (codeMatch) {
+                const ext = codeMatch[1];
+                const codeBody = codeMatch[2];
+                // build snippet
+                const header = document.createElement('div');
+                header.className = 'd-flex justify-content-between align-items-center bg-light border-bottom px-2 py-1 code-header';
+                header.innerHTML = `<strong>.${ext}</strong><div><button type="button" class="btn btn-sm btn-link copy-code"><i class="fas fa-copy"></i></button><a href="#" class="btn btn-sm btn-link download-code" role="button"><i class="fas fa-download"></i></a></div>`;
+                const pre = document.createElement('pre');
+                pre.className = 'm-0 p-2';
+                const codeEl = document.createElement('code');
+                codeEl.textContent = codeBody;
+                pre.appendChild(codeEl);
+                contentElement.appendChild(header);
+                contentElement.appendChild(pre);
+                // events
+                header.querySelector('.copy-code').addEventListener('click', (e)=>{e.stopPropagation(); navigator.clipboard.writeText(codeBody);});
+                header.querySelector('.download-code').addEventListener('click',(e)=>{e.stopPropagation(); const blob=new Blob([codeBody],{type:'text/plain'}); const url=URL.createObjectURL(blob); e.currentTarget.href=url; e.currentTarget.download=`snippet.${ext}`;});
+            } else {
+                contentElement.textContent = content;
+            }
         } else {
             contentElement.textContent = 'Encrypted message (click to decrypt)';
         }
@@ -1610,11 +1637,28 @@
             
             const contentDiv = messageElement.querySelector('.message-text');
             if (contentDiv) {
-                contentDiv.textContent = data.content || 'Could not decrypt message';
+                const plain = data.content || 'Could not decrypt message';
+                const codeMatch = plain.trim().match(/^@\.(\w+)\s([\s\S]*)/);
+                if (codeMatch) {
+                    const ext = codeMatch[1];
+                    const codeBody = codeMatch[2];
+                    contentDiv.innerHTML = '';
+                    const header = document.createElement('div');
+                    header.className = 'd-flex justify-content-between align-items-center bg-light border-bottom px-2 py-1 code-header';
+                    header.innerHTML = `<strong>.${ext}</strong><div><button type="button" class="btn btn-sm btn-link copy-code"><i class="fas fa-copy"></i></button><a href="#" class="btn btn-sm btn-link download-code" role="button"><i class="fas fa-download"></i></a></div>`;
+                    const pre = document.createElement('pre');
+                    pre.className = 'm-0 p-2';
+                    const codeEl = document.createElement('code');
+                    codeEl.textContent = codeBody;
+                    pre.appendChild(codeEl);
+                    contentDiv.appendChild(header);
+                    contentDiv.appendChild(pre);
+                    header.querySelector('.copy-code').addEventListener('click', (e)=>{e.stopPropagation(); navigator.clipboard.writeText(codeBody);});
+                    header.querySelector('.download-code').onclick = (e)=>{const blob=new Blob([codeBody],{type:'text/plain'});e.currentTarget.href=URL.createObjectURL(blob);e.currentTarget.download=`snippet.${ext}`;};
+                } else {
+                    contentDiv.textContent = plain;
+                }
                 contentDiv.style.cursor = 'default';
-                
-                // Remove any spinner or lock icons
-                contentDiv.innerHTML = contentDiv.textContent;
                 
                 // If decryption failed, add a retry button
                 if (!data.content) {
