@@ -51,7 +51,6 @@ body {
 .bubble.incoming {background: #ffffff; color:#1e293b; align-self:flex-start;}
 .bubble.outgoing {background: var(--primary); color:#fff; align-self:flex-end;}
 
-
 /* Tail pseudo-elements */
 .bubble.incoming::before, .bubble.outgoing::before {
   content:"";
@@ -72,3 +71,10 @@ body {
 .badge-pulse {
   animation:pulse 1.5s infinite;
 }
+
+/* ---- Code snippet bubble ---- */
+.code-header strong{font-size:0.85rem;color:#0d6efd;}
+.code-header .btn-link{color:#6c757d;}
+.code-header .btn-link:hover{color:#343a40;text-decoration:none;}
+.bubble pre{background:#000000;white-space:pre;font-family:monospace;border-radius:0 0 var(--radius) var(--radius);color:#ffffff;max-height:300px;overflow:auto;}
+
