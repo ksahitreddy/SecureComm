@@ -1,260 +1,661 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - SecureComm</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="https://img.icons8.com/color/48/000000/secure-message.png">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Bootstrap 5.3 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome 6 -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-{% block title %}Dashboard - SecureComm{% endblock %}
+        body {
+            font-family: 'Poppins', sans-serif;
+            overflow-x: hidden;
+            background: #0a0a0a;
+            color: white;
+            min-height: 100vh;
+        }
 
-{% block content %}
-<div class="container py-4">
-    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 animate-fadeInUp">
-        <!-- Left Sidebar -->
-        <div class="col-lg-4">
-            <!-- User Profile Card -->
-            <div class="card mb-4 shadow-sm animate-fadeInUp">
-                <div class="card-body text-center">
-                    <div class="position-relative d-inline-block mb-3">
-                        <div class="avatar-lg">
-                            <div class="avatar-title bg-light rounded-circle text-primary" style="width: 80px; height: 80px; line-height: 80px; font-size: 2rem;">
-                                {{ user.username[0]|upper }}
-                            </div>
-                        </div>
-                        <span class="position-absolute bottom-0 end-0 bg-success rounded-circle border border-3 border-white" style="width: 15px; height: 15px;"></span>
-                    </div>
-                    <h5 class="mb-1">{{ user.username }}</h5>
-                    <p class="text-muted mb-3">SecureComm User</p>
-                    <div class="d-flex justify-content-center gap-2">
-                        <a href="{{ url_for('user_settings') }}" class="btn btn-outline-primary btn-sm">
-                            <i class="fas fa-cog me-1"></i> Settings
-                        </a>
-                    </div>
-                </div>
-            </div>
+        /* Animated Background */
+        .animated-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -2;
+            background: linear-gradient(45deg, #0f0f23, #1a1a2e, #16213e, #0f3460, #533483);
+            background-size: 400% 400%;
+            animation: gradientShift 25s ease infinite;
+        }
 
-            <!-- Online Users Card -->
-            <div class="card shadow-sm animate-fadeInUp">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0"><i class="fas fa-users me-2"></i>Online Users</h5>
-                    <span class="badge bg-primary rounded-pill" id="online-count">0</span>
-                </div>
-                <div class="card-body p-0">
-                    <div class="list-group list-group-flush" id="online-users">
-                        <!-- Users will be added here dynamically -->
-                    </div>
-                    <div id="no-users-message" class="text-center py-4 d-none">
-                        <i class="fas fa-user-slash fa-2x mb-2 text-muted"></i>
-                        <p class="text-body-secondary mb-0">No other users online</p>
-                        <p class="small text-body-secondary">Invite friends to join SecureComm!</p>
-                    </div>
-                </div>
-            </div>
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            25% { background-position: 100% 50%; }
+            50% { background-position: 100% 100%; }
+            75% { background-position: 0% 100%; }
+            100% { background-position: 0% 50%; }
+        }
 
-            <!-- Find Users Card -->
-            <div class="card mb-4 shadow-sm animate-fadeInUp">
-                <div class="card-header">
-                    <h5 class="mb-0"><i class="fas fa-search me-2"></i>Find Users</h5>
-                </div>
-                <div class="card-body">
-                    <div class="input-group mb-3">
-                        <input type="text" id="user-search" class="form-control" placeholder="Search users...">
-                        <button class="btn btn-primary" type="button" id="search-users-btn">
-                            <i class="fas fa-search"></i>
-                        </button>
-                    </div>
-                    <div id="search-results" class="list-group list-group-flush" style="max-height: 200px; overflow-y: auto;">
-                        <!-- Search results will appear here -->
-                    </div>
-                </div>
-            </div>
+        /* Floating orbs */
+        .orbs {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            pointer-events: none;
+        }
 
-            <!-- Security Status Card -->
-            <div class="card mt-4">
-                <div class="card-header">
-                    <h5 class="mb-0"><i class="fas fa-shield-alt me-2"></i>Security Status</h5>
-                </div>
-                <div class="card-body">
-                    <div class="d-flex align-items-center mb-3">
-                        <div class="flex-shrink-0">
-                            <div class="avatar-sm">
-                                <div class="avatar-title bg-light text-success rounded-circle">
-                                    <i class="fas fa-key"></i>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="flex-grow-1 ms-3">
-                            <h6 class="mb-0 text-dark">End-to-End Encryption</h6>
-                            <p class="text-body-secondary small mb-0 text-dark">All messages are encrypted</p>
-                        </div>
-                        <span class="badge bg-success-subtle text-success">Active</span>
-                    </div>
-                    <div class="d-flex align-items-center mb-3">
-                        <div class="flex-shrink-0">
-                            <div class="avatar-sm">
-                                <div class="avatar-title bg-light text-primary rounded-circle">
-                                    <i class="fas fa-lock"></i>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="flex-grow-1 ms-3">
-                            <h6 class="mb-0 text-dark">Secure Connection</h6>
-                            <p class="text-body-secondary small mb-0 text-dark">TLS 1.3 Encrypted</p>
-                        </div>
-                        <span class="badge bg-success-subtle text-success">Active</span>
-                    </div>
-                    <div class="d-flex align-items-center">
-                        <div class="flex-shrink-0">
-                            <div class="avatar-sm">
-                                <div class="avatar-title bg-light text-warning rounded-circle">
-                                    <i class="fas fa-fingerprint"></i>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="flex-grow-1 ms-3">
-                            <h6 class="mb-0 text-dark">RSA-2048</h6>
-                            <p class="text-body-secondary small mb-0 text-dark">Key Strength</p>
-                        </div>
-                        <span class="badge bg-success-subtle text-success">Secure</span>
-                    </div>
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.1) 0%, transparent 70%);
+            animation: floatOrb 20s infinite ease-in-out;
+        }
+
+        .orb:nth-child(1) {
+            width: 200px;
+            height: 200px;
+            top: 10%;
+            left: 10%;
+            animation-duration: 25s;
+        }
+
+        .orb:nth-child(2) {
+            width: 150px;
+            height: 150px;
+            top: 60%;
+            right: 20%;
+            animation-duration: 30s;
+            background: radial-gradient(circle, rgba(255, 215, 0, 0.08) 0%, transparent 70%);
+        }
+
+        .orb:nth-child(3) {
+            width: 180px;
+            height: 180px;
+            bottom: 20%;
+            left: 30%;
+            animation-duration: 35s;
+            background: radial-gradient(circle, rgba(139, 92, 246, 0.08) 0%, transparent 70%);
+        }
+
+        @keyframes floatOrb {
+            0%, 100% {
+                transform: translate(0, 0) scale(1);
+            }
+            33% {
+                transform: translate(30px, -30px) scale(1.1);
+            }
+            66% {
+                transform: translate(-20px, 20px) scale(0.9);
+            }
+        }
+
+        /* Navigation */
+        .navbar {
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 1rem 0;
+            position: relative;
+            z-index: 1000;
+        }
+
+        /* Fix dropdown menu z-index */
+        .dropdown-menu {
+            z-index: 1050 !important;
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .navbar-brand {
+            font-family: 'Orbitron', monospace;
+            font-weight: 700;
+            color: #6366f1 !important;
+            font-size: 1.5rem;
+        }
+
+        /* Main container */
+        .dashboard-container {
+            min-height: 100vh;
+            padding: 2rem 0;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Cards */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .glass-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.4);
+        }
+
+        .profile-card {
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .avatar-lg {
+            width: 100px;
+            height: 100px;
+            background: linear-gradient(45deg, #6366f1, #8b5cf6);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            color: white;
+            margin: 0 auto 1rem;
+            position: relative;
+        }
+
+        .online-indicator {
+            position: absolute;
+            bottom: 5px;
+            right: 5px;
+            width: 20px;
+            height: 20px;
+            background: #10b981;
+            border: 3px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(16, 185, 129, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+            }
+        }
+
+        .btn-glass {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            border-radius: 12px;
+            padding: 0.5rem 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .btn-glass:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
+            transform: translateY(-2px);
+        }
+
+        .btn-primary-glass {
+            background: linear-gradient(45deg, #6366f1, #8b5cf6);
+            border: none;
+            color: white;
+            border-radius: 12px;
+            padding: 0.5rem 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary-glass:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(99, 102, 241, 0.3);
+            color: white;
+        }
+
+        /* Online users list */
+        .user-item {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .user-item:hover {
+            background: rgba(255, 255, 255, 0.08);
+            transform: translateX(5px);
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        /* User search item styling */
+        .search-item {
+            padding: 12px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .search-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .search-item:last-child {
+            margin-bottom: 0;
+        }
+
+        /* Online user item styling */
+        .online-user-item {
+            padding: 12px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .online-user-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .online-user-item:last-child {
+            margin-bottom: 0;
+        }
+
+        /* Stats cards */
+        .stat-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 1.5rem;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .stat-card:hover {
+            background: rgba(255, 255, 255, 0.08);
+            transform: translateY(-3px);
+        }
+
+        .stat-icon {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(45deg, #6366f1, #8b5cf6);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1rem;
+            font-size: 1.5rem;
+            color: white;
+        }
+
+        .search-box {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            color: white;
+            padding: 0.75rem 1rem;
+        }
+
+        .search-box:focus {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: #6366f1;
+            box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.25);
+            color: white;
+        }
+
+        .search-box::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        /* Security status */
+        .security-item {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .security-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+        }
+
+        .security-icon.success {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+        }
+
+        .security-icon.warning {
+            background: rgba(245, 158, 11, 0.2);
+            color: #f59e0b;
+        }
+
+        .badge-success {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        /* Modal fixes */
+        .modal {
+            z-index: 99999 !important;
+        }
+        
+        .modal-backdrop {
+            z-index: 99998 !important;
+        }
+        
+        .modal-content {
+            z-index: 100000 !important;
+        }
+        
+        .modal-dialog {
+            z-index: 100001 !important;
+        }
+        
+        /* Fix input focus in modal */
+        .modal input:focus {
+            outline: none !important;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.5) !important;
+        }
+        
+        /* Ensure modal is always interactive */
+        #inviteModal {
+            position: fixed !important;
+            z-index: 99999 !important;
+            pointer-events: auto !important;
+        }
+        
+        #inviteModal .modal-dialog {
+            z-index: 100000 !important;
+            pointer-events: auto !important;
+        }
+        
+        #inviteModal .modal-content {
+            z-index: 100001 !important;
+            pointer-events: auto !important;
+        }
+        
+        #inviteModal button {
+            z-index: 100002 !important;
+            pointer-events: auto !important;
+            cursor: pointer !important;
+        }
+        
+        /* Custom modal backdrop that doesn't block interaction */
+        #inviteModal::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 99997;
+            pointer-events: none;
+        }
+        
+        /* Remove default backdrop */
+        .modal-backdrop {
+            display: none !important;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .dashboard-container {
+                padding: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Animated Background -->
+    <div class="animated-bg"></div>
+    
+    <!-- Floating Orbs -->
+    <div class="orbs">
+        <div class="orb"></div>
+        <div class="orb"></div>
+        <div class="orb"></div>
+    </div>
+    
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-shield-alt me-2"></i>SecureComm
+            </a>
+            <div class="d-flex align-items-center gap-3">
+                <div class="dropdown">
+                    <button class="btn btn-glass dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        <i class="fas fa-user me-2"></i>{{ user.username }}
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-dark">
+                        <li><a class="dropdown-item" href="{{ url_for('user_settings') }}"><i class="fas fa-cog me-2"></i>Settings</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item text-danger" href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
+                    </ul>
                 </div>
             </div>
         </div>
-
-        <!-- Main Content -->
-        <div class="col-lg-8">
-            <!-- Welcome Card -->
-            <div class="card mb-4 shadow-sm animate-fadeInUp">
-                <div class="card-body">
-                    <div class="d-flex align-items-center mb-4">
-                        <div class="flex-grow-1">
-                            <h4 class="mb-1 text-dark">Welcome back, {{ user.username }}! 👋</h4>
-                            <p class="text-body-secondary mb-0 text-dark">Here's what's happening with your secure chats</p>
+    </nav>
+    
+    <!-- Main Content -->
+    <div class="dashboard-container">
+        <div class="container">
+            <div class="row g-4">
+                <!-- Left Sidebar -->
+                <div class="col-lg-4">
+                    <!-- User Profile Card -->
+                    <div class="glass-card profile-card mb-4">
+                        <div class="avatar-lg">
+                            {{ user.username[0]|upper }}
+                            <div class="online-indicator"></div>
                         </div>
-                        <div class="dropdown">
-                            <button class="btn btn-soft-primary btn-sm" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="fas fa-ellipsis-v"></i>
-                            </button>
-                            <ul class="dropdown-menu dropdown-menu-end">
-                                <li><a class="dropdown-item" href="#"><i class="fas fa-cog me-2"></i>Settings</a></li>
-                                <li><a class="dropdown-item" href="#"><i class="fas fa-question-circle me-2"></i>Help</a></li>
-                                <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item text-danger" href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
-                            </ul>
-                        </div>
+                        <h4 class="mb-2">{{ user.username }}</h4>
+                        <p class="text-muted mb-3">SecureComm User</p>
+                        <a href="{{ url_for('user_settings') }}" class="btn btn-glass">
+                            <i class="fas fa-cog me-2"></i>Settings
+                        </a>
                     </div>
 
-                    <!-- Stats -->
-                    <div class="row g-3 mb-4">
-                        <div class="col-md-6">
-                            <div class="card bg-light-subtle border-0 h-100 shadow-sm animate-fadeInUp">
-                                <div class="card-body">
-                                    <div class="d-flex align-items-center">
-                                        <div class="flex-shrink-0">
-                                            <div class="avatar-sm">
-                                                <div class="avatar-title bg-soft-primary text-primary rounded-3">
-                                                    <i class="fas fa-comment-dots"></i>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="flex-grow-1 ms-3">
-                                            <h5 class="mb-0 text-dark" id="total-messages">0</h5>
-                                            <p class="text-body-secondary mb-0 small">Total Messages</p>
-                                        </div>
-                                    </div>
-                                </div>
+                    <!-- Online Users Card -->
+                    <div class="glass-card mb-4">
+                        <div class="p-3">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h5 class="mb-0"><i class="fas fa-users me-2"></i>Online Users</h5>
+                                <span class="badge badge-success rounded-pill" id="online-count">0</span>
                             </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="card bg-light-subtle border-0 h-100 shadow-sm animate-fadeInUp">
-                                <div class="card-body">
-                                    <div class="d-flex align-items-center">
-                                        <div class="flex-shrink-0">
-                                            <div class="avatar-sm">
-                                                <div class="avatar-title bg-soft-success text-success rounded-3">
-                                                    <i class="fas fa-user-friends"></i>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="flex-grow-1 ms-3">
-                                            <h5 class="mb-0 text-dark" id="total-contacts">0</h5>
-                                            <p class="text-body-secondary mb-0 small">Total Contacts</p>
-                                        </div>
-                                    </div>
-                                </div>
+                            <div id="online-users">
+                                <!-- Users will be added here dynamically -->
+                            </div>
+                            <div id="no-users-message" class="text-center py-4 d-none">
+                                <i class="fas fa-user-slash fa-2x mb-2 text-muted"></i>
+                                <p class="text-muted mb-0">No other users online</p>
+                                <p class="small text-muted">Invite friends to join SecureComm!</p>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Quick Actions -->
-                    <h6 class="mb-3">Quick Actions</h6>
-                    <div class="row g-3 mb-4">
-                        <div class="col-6 col-md-3">
-                            <a href="#" class="card bg-light-subtle border-0 text-center p-3 h-100 text-decoration-none text-dark" data-bs-toggle="modal" data-bs-target="#inviteModal" id="inviteCard">
-                                <div class="avatar-sm mx-auto mb-2">
-                                    <div class="avatar-title bg-soft-primary text-primary rounded-3">
-                                        <i class="fas fa-envelope"></i>
-                                    </div>
-                                </div>
-                                <h6 class="mb-0">Invite Friend</h6>
-                            </a>
-                        </div>
-                        <div class="col-6 col-md-3">
-                            <a href="{{ url_for('user_settings') }}" class="card bg-light-subtle border-0 text-center p-3 h-100 text-decoration-none text-dark">
-                                <div class="avatar-sm mx-auto mb-2">
-                                    <div class="avatar-title bg-soft-warning text-warning rounded-3">
-                                        <i class="fas fa-cog"></i>
-                                    </div>
-                                </div>
-                                <h6 class="mb-0">Settings</h6>
-                            </a>
-                        </div>
-                        <div class="col-6 col-md-3">
-                            <a href="#" class="card bg-light-subtle border-0 text-center p-3 h-100 text-decoration-none text-dark">
-                                <div class="avatar-sm mx-auto mb-2">
-                                    <div class="avatar-title bg-soft-info text-info rounded-3">
-                                        <i class="fas fa-question"></i>
-                                    </div>
-                                </div>
-                                <h6 class="mb-0">Help</h6>
-                            </a>
+                    <!-- Find Users Card -->
+                    <div class="glass-card mb-4">
+                        <div class="p-3">
+                            <h5 class="mb-3"><i class="fas fa-search me-2"></i>Find Users</h5>
+                            <div class="input-group mb-3">
+                                <input type="text" id="user-search" class="search-box form-control" placeholder="Search users...">
+                                <button class="btn btn-primary-glass" type="button" id="search-users-btn">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                            </div>
+                            <div id="search-results" style="max-height: 200px; overflow-y: auto;">
+                                <!-- Search results will appear here -->
+                            </div>
                         </div>
                     </div>
 
-
-                    <!-- Recent Activity -->
-                    <div class="mt-4">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h6 class="mb-0">Recent Activity</h6>
-                            <a href="#" class="small">View All</a>
-                        </div>
-                        <div class="list-group list-group-flush">
-                            <div class="list-group-item border-0 px-0">
+                    <!-- Security Status Card -->
+                    <div class="glass-card">
+                        <div class="p-3">
+                            <h5 class="mb-3"><i class="fas fa-shield-alt me-2"></i>Security Status</h5>
+                            
+                            <div class="security-item">
                                 <div class="d-flex align-items-center">
-                                    <div class="flex-shrink-0">
-                                        <div class="avatar-xs">
-                                            <div class="avatar-title bg-soft-primary text-primary rounded-circle">
-                                                <i class="fas fa-user"></i>
-                                            </div>
-                                        </div>
+                                    <div class="security-icon success me-3">
+                                        <i class="fas fa-key"></i>
                                     </div>
-                                    <div class="flex-grow-1 ms-3">
-                                        <h6 class="mb-0">New login detected</h6>
-                                        <p class="text-muted small mb-0">Just now from Chrome on Windows</p>
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-0">End-to-End Encryption</h6>
+                                        <p class="text-muted small mb-0">All messages are encrypted</p>
                                     </div>
-                                    <span class="text-muted small">Now</span>
+                                    <span class="badge badge-success">Active</span>
                                 </div>
                             </div>
-                            <div class="list-group-item border-0 px-0">
+                            
+                            <div class="security-item">
                                 <div class="d-flex align-items-center">
-                                    <div class="flex-shrink-0">
-                                        <div class="avatar-xs">
-                                            <div class="avatar-title bg-soft-success text-success rounded-circle">
-                                                <i class="fas fa-lock"></i>
+                                    <div class="security-icon success me-3">
+                                        <i class="fas fa-lock"></i>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-0">Secure Connection</h6>
+                                        <p class="text-muted small mb-0">TLS 1.3 Encrypted</p>
+                                    </div>
+                                    <span class="badge badge-success">Active</span>
+                                </div>
+                            </div>
+                            
+                            <div class="security-item">
+                                <div class="d-flex align-items-center">
+                                    <div class="security-icon warning me-3">
+                                        <i class="fas fa-fingerprint"></i>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-0">RSA-2048</h6>
+                                        <p class="text-muted small mb-0">Key Strength</p>
+                                    </div>
+                                    <span class="badge badge-success">Secure</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Main Content -->
+                <div class="col-lg-8">
+                    <!-- Welcome Card -->
+                    <div class="glass-card mb-4">
+                        <div class="p-4">
+                            <div class="d-flex align-items-center mb-4">
+                                <div class="flex-grow-1">
+                                    <h3 class="mb-2">Welcome back, {{ user.username }}! 👋</h3>
+                                    <p class="text-muted mb-0">Here's what's happening with your secure chats</p>
+                                </div>
+                            </div>
+
+                            <!-- Stats -->
+                            <div class="glass-card mb-4">
+                                <div class="p-4">
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Quick Stats</h5>
+                                        <button class="btn btn-primary-glass btn-sm" data-bs-toggle="modal" data-bs-target="#inviteModal">
+                                            <i class="fas fa-user-plus me-1"></i>Invite Friends
+                                        </button>
+                                    </div>
+                                    <div class="row g-3">
+                                        <div class="col-md-4">
+                                            <div class="stat-card">
+                                                <div class="stat-icon">
+                                                    <i class="fas fa-comments"></i>
+                                                </div>
+                                                <h4 class="mb-1" id="total-messages">0</h4>
+                                                <p class="text-muted mb-0">Total Messages</p>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="stat-card">
+                                                <div class="stat-icon">
+                                                    <i class="fas fa-paper-plane"></i>
+                                                </div>
+                                                <h4 class="mb-1" id="messages-sent">0</h4>
+                                                <p class="text-muted mb-0">Messages Sent</p>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="stat-card">
+                                                <div class="stat-icon">
+                                                    <i class="fas fa-users"></i>
+                                                </div>
+                                                <h4 class="mb-1" id="online-users-count">0</h4>
+                                                <p class="text-muted mb-0">Online Now</p>
                                             </div>
                                         </div>
                                     </div>
-                                    <div class="flex-grow-1 ms-3">
-                                        <h6 class="mb-0">Security keys updated</h6>
-                                        <p class="text-muted small mb-0">Your encryption keys have been rotated</p>
-                                    </div>
-                                    <span class="text-muted small">2h ago</span>
                                 </div>
+                            </div>
+
+                    <!-- Recent Chats -->
+                    <div class="glass-card">
+                        <div class="p-4">
+                            <h5 class="mb-3"><i class="fas fa-clock me-2"></i>Recent Chats</h5>
+                            <div id="recent-chats">
+                                <!-- Recent chats will be populated here -->
+                            </div>  
+                            <div id="no-chats-message" class="text-center py-5">
+                                <i class="fas fa-comments fa-3x mb-3 text-muted"></i>
+                                <h5 class="text-muted mb-2">No recent chats</h5>
+                                <p class="text-muted mb-3">Start a conversation by searching for users above</p>
+                                <button class="btn btn-primary-glass" onclick="document.getElementById('user-search').focus()">
+                                    <i class="fas fa-search me-2"></i>Find Users
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -262,310 +663,396 @@
             </div>
         </div>
     </div>
-</div>
 
-{% endblock %}
-
-{% block scripts %}
-<script>
-    // Global variables
-    const currentUser = '{{ user.username }}';
-    // use global socket from base.html
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Socket.IO -->
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
     
-    document.addEventListener('DOMContentLoaded', function() {
-        // Initialize tooltips
-        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-        tooltipTriggerList.map(function (tooltipTriggerEl) {
-            return new bootstrap.Tooltip(tooltipTriggerEl);
+    <!-- Invite Friends Modal -->
+    <div class="modal fade" id="inviteModal" tabindex="-1" aria-labelledby="inviteModalLabel" aria-hidden="true" 
+         data-bs-backdrop="false" data-bs-keyboard="true" style="z-index: 99999 !important;">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content" style="background: rgba(0, 0, 0, 0.95); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.2); z-index: 100000 !important;">
+                <div class="modal-header border-bottom border-secondary">
+                    <h5 class="modal-title text-white" id="inviteModalLabel">
+                        <i class="fas fa-user-plus me-2"></i>Invite Friends
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-white-50 mb-3">Invite your friends to join SecureComm and start secure conversations!</p>
+                    <div class="mb-3">
+                        <label for="inviteEmail" class="form-label text-white">Friend's Email Address</label>
+                        <input type="email" class="form-control" id="inviteEmail" placeholder="Enter email address" 
+                               style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.3); color: white;">
+                    </div>
+                    <div class="alert alert-info" style="background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.3); color: #93C5FD;">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Your friend will receive an email with a link to register on SecureComm.
+                    </div>
+                </div>
+                <div class="modal-footer border-top border-secondary">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="closeInviteModal()"
+                            style="background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.3); color: white;">
+                        Cancel
+                    </button>
+                    <button type="button" class="btn btn-primary" id="sendInviteBtn" onclick="sendInvitation()"
+                            style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none;">
+                        <i class="fas fa-paper-plane me-2"></i>Send Invitation
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Socket.IO
+        const socket = io();
+        let onlineUsers = new Set();
+        let currentUser = '{{ user.username }}';
+        let recentChats = [];
+        
+        // Connect to server
+        socket.on('connect', function() {
+            console.log('Connected to server as:', currentUser);
+            socket.emit('join', {username: currentUser});
         });
         
-        // Initialize popovers
-        const popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
-        popoverTriggerList.map(function (popoverTriggerEl) {
-            return new bootstrap.Popover(popoverTriggerEl);
+        // Handle disconnect
+        socket.on('disconnect', function() {
+            console.log('Disconnected from server');
         });
         
-        // Initialize socket connection
+        // Handle online users updates (backend sends 'online_users')
+        socket.on('online_users', function(data) {
+            console.log('Online users received:', data);
+            if (data && data.users) {
+                updateOnlineUsers(data.users);
+            }
+        });
+        
+        // Handle user status changes (backend sends 'user_status')
+        socket.on('user_status', function(data) {
+            console.log('User status change:', data);
+            if (data.username && data.username !== currentUser) {
+                if (data.status === 'online') {
+                    onlineUsers.add(data.username);
+                } else if (data.status === 'offline') {
+                    onlineUsers.delete(data.username);
+                }
+                updateOnlineUsersDisplay();
+            }
+        });
+        
+        // Handle new messages to update stats
+        socket.on('message', function(data) {
+            console.log('Message received, updating stats...');
+            // Reload stats when a message is sent or received
+            loadDashboardStats();
+        });
+        
+        // Handle message delivery confirmations
+        socket.on('message_delivered', function(data) {
+            // Stats might need updating for delivery status
+            loadDashboardStats();
+        });
+        
 
         
-        // Handle initial list of online users
-        socket.on('online_users', function(data) {
-            const onlineUsers = document.getElementById('online-users');
-            const onlineCount = document.getElementById('online-count');
+        // Update online users display
+        function updateOnlineUsers(users) {
+            console.log('Updating online users with:', users);
+            if (Array.isArray(users)) {
+                // Filter out current user and update the set
+                onlineUsers = new Set(users.filter(user => user !== currentUser));
+                console.log('Online users set updated:', Array.from(onlineUsers));
+                updateOnlineUsersDisplay();
+            } else {
+                console.warn('Invalid users data received:', users);
+            }
+        }
+        
+        function updateOnlineUsersDisplay() {
+            const container = document.getElementById('online-users');
+            const countElement = document.getElementById('online-count');
+            const noUsersMessage = document.getElementById('no-users-message');
+            const onlineUsersCountStat = document.getElementById('online-users-count');
             
-            // Clear existing online users (except the current user)
-            onlineUsers.innerHTML = '';
-            let userCount = 0;
+            countElement.textContent = onlineUsers.size;
+            if (onlineUsersCountStat) {
+                onlineUsersCountStat.textContent = onlineUsers.size;
+            }
             
-            if (data.users && data.users.length > 0) {
-                data.users.forEach(function(username) {
-                    if (username !== currentUser) {
-                        addUserToOnlineList(username, true);
-                        userCount++;
+            if (onlineUsers.size === 0) {
+                container.innerHTML = '';
+                noUsersMessage.classList.remove('d-none');
+            } else {
+                noUsersMessage.classList.add('d-none');
+                container.innerHTML = Array.from(onlineUsers).map(user => `
+                    <div class="online-user-item" onclick="startChat('${user}')" title="Click to start chat with ${user}">
+                        <div class="d-flex align-items-center">
+                            <div class="user-avatar me-3">
+                                ${user[0].toUpperCase()}
+                            </div>
+                            <div class="flex-grow-1">
+                                <h6 class="mb-0 text-white">${user}</h6>
+                                <p class="text-white-50 small mb-0">
+                                    <i class="fas fa-circle text-success me-1" style="font-size: 0.5rem;"></i>Online now
+                                </p>
+                            </div>
+                            <div class="text-primary">
+                                <i class="fas fa-comment"></i>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+        
+        // User search functionality
+        document.getElementById('search-users-btn').addEventListener('click', searchUsers);
+        
+        // Add Enter key support for search
+        document.getElementById('user-search').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                searchUsers();
+            }
+        });
+        
+        // Clear search results when input is empty
+        document.getElementById('user-search').addEventListener('input', function(e) {
+            if (!e.target.value.trim()) {
+                document.getElementById('search-results').innerHTML = '';
+            }
+        });
+        
+        // Simple modal functions
+        function closeInviteModal() {
+            const modal = bootstrap.Modal.getInstance(document.getElementById('inviteModal'));
+            if (modal) {
+                modal.hide();
+            }
+        }
+        
+        // Load dashboard statistics
+        async function loadDashboardStats() {
+            try {
+                const response = await fetch('/api/dashboard/stats');
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Update total messages
+                    const totalMessagesElement = document.getElementById('total-messages');
+                    if (totalMessagesElement) {
+                        totalMessagesElement.textContent = data.total_messages || 0;
+                    }
+                    
+                    // Update messages sent
+                    const messagesSentElement = document.getElementById('messages-sent');
+                    if (messagesSentElement) {
+                        messagesSentElement.textContent = data.messages_sent || 0;
+                    }
+                    
+                    console.log('Dashboard stats loaded:', data);
+                } else {
+                    console.error('Failed to load dashboard stats:', data.message);
+                }
+            } catch (error) {
+                console.error('Error loading dashboard stats:', error);
+            }
+        }
+        
+        // Load stats when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            loadDashboardStats();
+        });
+        
+        // Add escape key handler
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                const modal = document.getElementById('inviteModal');
+                if (modal && modal.classList.contains('show')) {
+                    closeInviteModal();
+                }
+            }
+        });
+        
+        // Ensure modal is interactive when shown
+        document.addEventListener('DOMContentLoaded', function() {
+            const modalElement = document.getElementById('inviteModal');
+            if (modalElement) {
+                modalElement.addEventListener('shown.bs.modal', function() {
+                    console.log('Modal shown, ensuring interactivity...');
+                    // Force z-index and pointer events
+                    this.style.zIndex = '99999';
+                    this.style.pointerEvents = 'auto';
+                    
+                    const modalDialog = this.querySelector('.modal-dialog');
+                    if (modalDialog) {
+                        modalDialog.style.zIndex = '100000';
+                        modalDialog.style.pointerEvents = 'auto';
+                    }
+                    
+                    const modalContent = this.querySelector('.modal-content');
+                    if (modalContent) {
+                        modalContent.style.zIndex = '100001';
+                        modalContent.style.pointerEvents = 'auto';
+                    }
+                    
+                    // Focus the email input
+                    const emailInput = document.getElementById('inviteEmail');
+                    if (emailInput) {
+                        setTimeout(() => emailInput.focus(), 100);
                     }
                 });
             }
-            
-            // Update online count
-            onlineCount.textContent = userCount;
-            
-            // Show/hide no users message
-            updateNoUsersMessage(userCount > 0);
         });
         
-        // Handle user status updates
-        socket.on('user_status', function(data) {
-            const onlineCount = document.getElementById('online-count');
-            const currentCount = parseInt(onlineCount.textContent) || 0;
-            const userElement = document.getElementById(`user-${data.username}`);
+        // Invite friends functionality
+        async function sendInvitation() {
+            console.log('Send invitation called');
+            const email = document.getElementById('inviteEmail').value.trim();
             
-            if (data.status === 'online') {
-                if (!userElement) {
-                    addUserToOnlineList(data.username, true);
-                    onlineCount.textContent = currentCount + 1;
-                }
-            } else if (userElement) {
-                updateUserStatus(data.username, false);
-                onlineCount.textContent = Math.max(0, currentCount - 1);
-            }
-            
-            updateNoUsersMessage(parseInt(onlineCount.textContent) > 0);
-        });
-        
-        // Add user to online list
-        function addUserToOnlineList(username, isOnline) {
-            const onlineUsers = document.getElementById('online-users');
-            const userElement = document.createElement('div');
-            userElement.className = 'list-group-item list-group-item-action border-0';
-            userElement.id = `user-${username}`;
-            
-            userElement.innerHTML = `
-                <div class="d-flex align-items-center">
-                    <div class="position-relative">
-                        <div class="avatar-xs">
-                            <div class="avatar-title bg-soft-primary text-primary rounded-circle">
-                                ${username.charAt(0).toUpperCase()}
-                            </div>
-                        </div>
-                        <span class="position-absolute bottom-0 end-0 bg-success border border-2 border-white rounded-circle" style="width: 10px; height: 10px;"></span>
-                    </div>
-                    <div class="flex-grow-1 ms-3">
-                        <h6 class="mb-0">${username}</h6>
-                        <p class="text-muted small mb-0">Active now</p>
-                    </div>
-                    <div class="ms-auto">
-                        <a href="/chat/${username}" class="btn btn-sm btn-soft-primary">
-                            <i class="fas fa-comment-dots"></i>
-                        </a>
-                    </div>
-                </div>
-            `;
-            
-            onlineUsers.prepend(userElement);
-        }
-        
-        // Update user status
-        function updateUserStatus(username, isOnline) {
-            const userElement = document.getElementById(`user-${username}`);
-            if (userElement) {
-                const statusDot = userElement.querySelector('.position-absolute');
-                const statusText = userElement.querySelector('.text-muted');
-                
-                if (isOnline) {
-                    if (statusDot) statusDot.className = 'position-absolute bottom-0 end-0 bg-success border border-2 border-white rounded-circle';
-                    if (statusText) statusText.textContent = 'Active now';
-                } else {
-                    if (statusDot) statusDot.className = 'position-absolute bottom-0 end-0 bg-secondary border border-2 border-white rounded-circle';
-                    if (statusText) statusText.textContent = 'Offline';
-                }
-            }
-        }
-        
-        // Update no users message
-        function updateNoUsersMessage(hasUsers) {
-            const noUsersMessage = document.getElementById('no-users-message');
-            if (noUsersMessage) {
-                noUsersMessage.classList.toggle('d-none', hasUsers);
-            }
-        }
-        
-        // Request the current list of online users
-        if (socket) {
-            socket.emit('get_online_users');
-        }
-        
-        // Fetch real stats
-        fetch('/api/dashboard/stats')
-          .then(res => res.json())
-          .then(data => {
-            if (data.success) {
-              document.getElementById('total-messages').textContent = data.total_messages;
-              document.getElementById('total-contacts').textContent = data.total_contacts;
-            } else {
-              console.error('Failed to fetch stats:', data.message);
-            }
-          })
-          .catch(err => console.error('Error:', err));
-        
-        // Invite form submit
-        document.getElementById('inviteForm').addEventListener('submit', function(e){
-          e.preventDefault();
-          const email = document.getElementById('inviteEmail').value.trim();
-          const alertBox = document.getElementById('inviteAlert');
-          const spinner = document.getElementById('inviteSpinner');
-          if(!email){return;}
-          spinner.classList.remove('d-none');
-          fetch('/api/invite', {
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({email})
-          }).then(r=>r.json()).then(data=>{
-            spinner.classList.add('d-none');
-            alertBox.classList.remove('d-none','alert-danger','alert-success');
-            if(data.success){
-              alertBox.classList.add('alert-success');
-              alertBox.textContent = data.message;
-            }else{
-              alertBox.classList.add('alert-danger');
-              alertBox.textContent = data.message || 'Failed to send invite';
-            }
-          }).catch(err=>{
-            spinner.classList.add('d-none');
-            alertBox.classList.remove('d-none');
-            alertBox.classList.add('alert-danger');
-            alertBox.textContent = 'Error sending invite';
-          });
-        });
-
-        // Initialize clipboard for invite link
-        const inviteLink = `${window.location.origin}/register?ref=${currentUser}`;
-        const copyInviteBtn = document.getElementById('copyInviteLink');
-        if (copyInviteBtn) {
-            copyInviteBtn.addEventListener('click', function() {
-                navigator.clipboard.writeText(inviteLink).then(function() {
-                    const tooltip = new bootstrap.Tooltip(copyInviteBtn, {
-                        title: 'Copied!',
-                        trigger: 'manual'
-                    });
-                    tooltip.show();
-                    setTimeout(() => tooltip.hide(), 1000);
-                });
-            });
-        }
-    });
-
-    // User search functionality
-    document.addEventListener('DOMContentLoaded', function() {
-        const searchInput = document.getElementById('user-search');
-        const searchButton = document.getElementById('search-users-btn');
-        const searchResults = document.getElementById('search-results');
-        
-        // Handle search on button click
-        searchButton.addEventListener('click', performSearch);
-        
-        // Handle search on Enter key
-        searchInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                performSearch();
-            }
-        });
-        
-        function performSearch() {
-            const query = searchInput.value.trim();
-            if (!query) {
-                showSearchResults([]);
+            if (!email) {
+                alert('Please enter an email address');
                 return;
             }
             
-            // Show loading state
-            searchResults.innerHTML = '<div class="text-center p-3"><div class="spinner-border spinner-border-sm" role="status"></div> Searching...</div>';
+            if (!email.includes('@') || !email.includes('.')) {
+                alert('Please enter a valid email address');
+                return;
+            }
             
-            // Send search request to server
+            const btn = document.getElementById('sendInviteBtn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Sending...';
+            btn.disabled = true;
+            
+            try {
+                const response = await fetch('/api/invite', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email: email })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('Invitation sent successfully!');
+                    document.getElementById('inviteEmail').value = '';
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('inviteModal'));
+                    if (modal) {
+                        modal.hide();
+                    }
+                } else {
+                    alert('Failed to send invitation: ' + result.message);
+                }
+            } catch (error) {
+                console.error('Error sending invitation:', error);
+                alert('Failed to send invitation. Please try again.');
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+        
+        function searchUsers() {
+            const query = document.getElementById('user-search').value.trim();
+            if (!query) return;
+            
+            // Show loading state
+            const searchBtn = document.getElementById('search-users-btn');
+            const originalContent = searchBtn.innerHTML;
+            searchBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            searchBtn.disabled = true;
+            
             fetch(`/api/users/search?q=${encodeURIComponent(query)}`, {
+                method: 'GET',
                 headers: {
-                    'Accept': 'application/json'
+                    'Content-Type': 'application/json',
                 }
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    const qLower = query.toLowerCase();
-                    const filtered = (data.users || []).filter(u => (u.username || '').toLowerCase().includes(qLower));
-                    showSearchResults(filtered);
+                    displaySearchResults(data.users || []);
                 } else {
-                    throw new Error(data.message || 'Search failed');
+                    console.error('Search failed:', data.message);
+                    displaySearchResults([]);
                 }
             })
             .catch(error => {
                 console.error('Search error:', error);
-                searchResults.innerHTML = `<div class="text-danger p-2">Error: ${error.message || 'Failed to search users'}</div>`;
+                displaySearchResults([]);
+            })
+            .finally(() => {
+                // Restore button state
+                searchBtn.innerHTML = originalContent;
+                searchBtn.disabled = false;
             });
         }
         
-        function showSearchResults(users) {
-            if (!users || users.length === 0) {
-                searchResults.innerHTML = '<div class="text-muted p-2">No users found</div>';
+        function displaySearchResults(users) {
+            const container = document.getElementById('search-results');
+            
+            if (users.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-4">
+                        <i class="fas fa-search fa-2x mb-2 text-muted"></i>
+                        <p class="text-muted mb-0">No users found</p>
+                        <p class="small text-muted">Try a different search term</p>
+                    </div>
+                `;
                 return;
             }
             
-            searchResults.innerHTML = users.map(user => `
-                <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+            container.innerHTML = users.map(user => `
+                <div class="search-item" onclick="startChat('${user.username}')" title="Click to start chat with ${user.username}">
                     <div class="d-flex align-items-center">
-                        <div class="position-relative me-2">
-                            <div class="avatar-sm">
-                                <div class="avatar-title bg-light rounded-circle text-primary">
-                                    ${user.username[0].toUpperCase()}
-                                </div>
-                            </div>
-                            <span class="position-absolute bottom-0 end-0 bg-${user.is_online ? 'success' : 'secondary'} border border-2 border-white rounded-circle" style="width: 10px; height: 10px;"></span>
+                        <div class="user-avatar me-3">
+                            ${user.username[0].toUpperCase()}
                         </div>
-                        <div>
+                        <div class="flex-grow-1">
                             <h6 class="mb-0">${user.username}</h6>
-                            <small class="text-muted">${user.is_online ? 'Online' : 'Offline'}</small>
+                            <p class="text-muted small mb-0">
+                                ${user.is_online ? 
+                                    '<i class="fas fa-circle text-success me-1" style="font-size: 0.5rem;"></i>Online now' : 
+                                    '<i class="fas fa-circle text-muted me-1" style="font-size: 0.5rem;"></i>Offline'
+                                }
+                            </p>
+                        </div>
+                        <div class="text-primary">
+                            <i class="fas fa-comment"></i>
                         </div>
                     </div>
-                    <button class="btn btn-sm btn-outline-primary message-user" data-username="${user.username}" ${user.username === currentUser ? 'disabled' : ''}>
-                        <i class="fas fa-paper-plane me-1"></i> Message
-                    </button>
                 </div>
             `).join('');
-            
-            // Add event listeners to message buttons
-            document.querySelectorAll('.message-user').forEach(button => {
-                button.addEventListener('click', function() {
-                    const recipient = this.getAttribute('data-username');
-                    window.location.href = `/chat/${recipient}`;
-                });
-            });
         }
-    });
-</script>
-
-<!-- Invite Friend Modal -->
-<div class="modal fade" id="inviteModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Invite a Friend</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <form id="inviteForm">
-        <div class="modal-body">
-          <div class="mb-3">
-            <label for="inviteEmail" class="form-label">Friend's email</label>
-            <input type="email" class="form-control" id="inviteEmail" placeholder="name@example.com" required>
-          </div>
-          <div id="inviteAlert" class="alert d-none" role="alert"></div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-          <button type="submit" class="btn btn-primary" id="sendInviteBtn">
-            <span class="spinner-border spinner-border-sm d-none" id="inviteSpinner"></span>
-            Send Invite
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
-{% endblock %}
+        
+        // Start chat function
+        function startChat(username) {
+            window.location.href = `/chat/${username}`;
+        }
+        
+        // Load recent chats (placeholder)
+        function loadRecentChats() {
+            // This would typically load from the server
+            const recentChatsContainer = document.getElementById('recent-chats');
+            const noChatsMessage = document.getElementById('no-chats-message');
+            
+            // For now, show no chats message
+            recentChatsContainer.innerHTML = '';
+            noChatsMessage.style.display = 'block';
+        }
+        
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            loadRecentChats();
+        });
+    </script>
+</body>
+</html>
