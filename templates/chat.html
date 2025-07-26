@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Chat with {{ recipient }} - Secure Chat{% endblock %}
+{% block title %}Chat with {{ recipient }} - SecureComm{% endblock %}
 
 {% block content %}
 <div class="row">
@@ -1461,11 +1461,27 @@ document.getElementById('send-button').addEventListener('click', function() {
     }
     
     function loadChatHistory() {
+        // Load messages via AJAX to avoid JSON parsing issues in template
+        fetch(`/api/messages/{{ recipient }}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const messages = data.messages || [];
+                    console.log('Loaded', messages.length, 'messages from API');
+                    processMessages(messages);
+                } else {
+                    console.error('Failed to load messages:', data.message);
+                    addEncryptionLog('❌ Failed to load chat history', 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error loading messages:', error);
+                addEncryptionLog('❌ Error loading chat history', 'danger');
+            });
+    }
+    
+    function processMessages(messages) {
         try {
-            // Safely parse messages from template data
-            const messagesJson = '{{ messages | tojson | safe }}';
-            console.log('Raw messages JSON from template:', messagesJson);
-            const messages = JSON.parse(messagesJson) || [];
             
             if (!Array.isArray(messages)) {
                 console.error('Invalid messages format:', messages);
@@ -1571,7 +1587,14 @@ document.getElementById('send-button').addEventListener('click', function() {
     socket.on('chat_cleared', function(data) {
         if (data.with_user === '{{ recipient }}' || data.from_user === '{{ recipient }}') {
             // Clear the chat UI if we're in the chat that was cleared
-            document.getElementById('chat-messages').innerHTML = '';
+            const messageList = document.getElementById('message-list');
+            if (messageList) {
+                messageList.innerHTML = '';
+            }
+            const chatMessages = document.getElementById('chat-messages');
+            if (chatMessages) {
+                chatMessages.innerHTML = '';
+            }
             addEncryptionLog('Chat history has been cleared', 'info');
         }
     });
