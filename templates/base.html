@@ -20,6 +20,8 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     
     <!-- Custom CSS -->
+    <!-- Marked.js for markdown parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         :root {
             --primary-color: #6366f1;
@@ -487,25 +489,12 @@
     {% endwith %}
 
     <div class="container mt-4">
-        {% with messages = get_flashed_messages(with_categories=True) %}
-        {% if messages %}
-          {% for m in messages %}
-            {% if m is sequence and m|length == 2 %}
-              {% set category, msg = m %}
-            {% else %}
-              {% set category = 'info' %}
-              {% set msg = m %}
-            {% endif %}
-          {% endfor %}
-        {% endif %}
-      {% endwith %}
-
         {% block content %}{% endblock %}
     </div>
     <!-- Footer -->
     <footer class="mt-auto py-4 text-center text-muted">
         <div class="container">
-            <p class="mb-0"> 2025 SecureComm. Created by Sahit and Hemanth.</p>
+            <p class="mb-0"> 2023 SecureComm</p>
             <small>End-to-end encrypted messaging for everyone</small>
         </div>
     </footer>
