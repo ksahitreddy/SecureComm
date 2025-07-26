@@ -908,6 +908,31 @@ def validate_encryption():
         }), 500
 
 
+@app.route('/api/messages/<recipient>')
+@login_required
+def get_messages_api(recipient):
+    """API endpoint to get messages between current user and recipient"""
+    if 'username' not in session:
+        return jsonify({'success': False, 'message': 'Not authenticated'}), 401
+        
+    username = session['username']
+    
+    try:
+        # Get messages between the two users
+        messages = mongo_auth.get_messages(username, recipient)
+        logger.info(f'API: Got {len(messages)} messages for {username} and {recipient}')
+        
+        return jsonify({
+            'success': True,
+            'messages': messages
+        })
+    except Exception as e:
+        logger.error(f'Error getting messages via API: {e}', exc_info=True)
+        return jsonify({
+            'success': False,
+            'message': 'Failed to load messages'
+        }), 500
+
 @app.route('/chat/<recipient>')
 @login_required
 def chat(recipient):
@@ -925,10 +950,6 @@ def chat(recipient):
     # Get user's public key for encryption
     public_key_pem = mongo_auth.get_public_key(username)
     
-    # Get messages between the two users
-    messages = mongo_auth.get_messages(username, recipient)
-    logger.info(f'Chat route: Got {len(messages)} messages for template')
-    
     # Get online status of the recipient
     online_users = mongo_auth.get_online_users()
     is_recipient_online = recipient in online_users
@@ -937,7 +958,6 @@ def chat(recipient):
                            user=user,
                            current_user={'username': username},  # Add current_user for template
                            recipient=recipient,
-                           messages=messages,
                            public_key=public_key_pem,
                            is_recipient_online=is_recipient_online)
 
@@ -1497,19 +1517,35 @@ def clear_chat():
         if not other_user:
             return jsonify({'success': False, 'message': 'Other user is required'}), 400
             
-        # Delete messages in both directions
+        # Delete messages in both directions (including AI messages)
         result = mongo_auth.messages.delete_many({
             '$or': [
                 {'sender': current_user, 'recipient': other_user},
-                {'sender': other_user, 'recipient': current_user}
+                {'sender': other_user, 'recipient': current_user},
+                # Also delete AI messages in this conversation
+                {'sender': 'SecureAI', 'recipient': current_user},
+                {'sender': 'SecureAI', 'recipient': other_user}
             ]
         })
         
+        logger.info(f'Cleared {result.deleted_count} messages between {current_user} and {other_user}')
+        
         # Notify both users to clear their chat UI
-        socketio.emit('chat_cleared', {
+        current_user_sid = active_connections.get(current_user)
+        other_user_sid = active_connections.get(other_user)
+        
+        clear_data = {
             'from_user': current_user,
             'with_user': other_user
-        })
+        }
+        
+        # Send to current user
+        if current_user_sid:
+            socketio.emit('chat_cleared', clear_data, room=current_user_sid)
+            
+        # Send to other user
+        if other_user_sid:
+            socketio.emit('chat_cleared', clear_data, room=other_user_sid)
         
         return jsonify({
             'success': True,
