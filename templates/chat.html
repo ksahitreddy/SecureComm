@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Chat with {{ recipient }} - Secure Chat{% endblock %}
+{% block title %}Chat with {{ recipient }} - SecureComm{% endblock %}
 
 {% block content %}
 <div class="row">
@@ -1253,10 +1253,6 @@ document.getElementById('send-button').addEventListener('click', function() {
         if (isFile) {
             contentElement.innerHTML = content; // safe because server already sanitized the link
         } else if (isPlaintext) {
-            // Highlight @SecureAI mention in messages
-            if (content.includes('@SecureAI')) {
-                content = content.replace(/@SecureAI/g, '<span class="ai-mention">@SecureAI</span>');
-            }
             const codeMatch = content.trim().match(/^@\.(\w+)\s([\s\S]*)/);
             if (codeMatch) {
                 const ext = codeMatch[1];
@@ -1276,7 +1272,26 @@ document.getElementById('send-button').addEventListener('click', function() {
                 header.querySelector('.copy-code').addEventListener('click', (e)=>{e.stopPropagation(); navigator.clipboard.writeText(codeBody);});
                 header.querySelector('.download-code').addEventListener('click',(e)=>{e.stopPropagation(); const blob=new Blob([codeBody],{type:'text/plain'}); const url=URL.createObjectURL(blob); e.currentTarget.href=url; e.currentTarget.download=`snippet.${ext}`;});
             } else {
-                contentElement.textContent = content;
+                // Check if message contains @SecureAI
+                if (content.startsWith('@SecureAI')) {
+                    // Create a wrapper span for the entire message
+                    const wrapper = document.createElement('span');
+                    wrapper.className = 'message-content';
+                    
+                    // Add @SecureAI with special class
+                    const aiTag = document.createElement('span');
+                    aiTag.className = 'secure-ai-tag';
+                    aiTag.textContent = '@SecureAI';
+                    wrapper.appendChild(aiTag);
+                    
+                    // Add the rest of the message
+                    const restOfMessage = document.createTextNode(content.substring(10)); // 10 is length of '@SecureAI '
+                    wrapper.appendChild(restOfMessage);
+                    
+                    contentElement.appendChild(wrapper);
+                } else {
+                    contentElement.textContent = content;
+                }
             }
         } else {
             contentElement.textContent = 'Encrypted message (click to decrypt)';
@@ -1301,7 +1316,7 @@ document.getElementById('send-button').addEventListener('click', function() {
             updateMessageStatus(statusElement, status || 'sending');
             
             statusElement.appendChild(document.createTextNode(' '));
-            statusElement.appendChild(document.createTextNode(status === 'delivered' ? 'Delivered' : ''));
+            statusElement.appendChild(document.createTextNode(status === 'delivered' ? '' : 'Not Delivered'));
         }
         
         const timeElement = document.createElement('div');
