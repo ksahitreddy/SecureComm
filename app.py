@@ -61,7 +61,7 @@ app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER', 'ilike
 mail = Mail(app)
 
 # ---------------- AI Configuration ----------------
-GROQ_API_KEY = os.environ.get('GROQ_API_KEY', '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')
+GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
 GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions'
 GROQ_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct'
 AI_SYSTEM_PROMPT = """You are SecureAI, an intelligent assistant integrated into SecureComm chat application. You help users with questions and provide information. Be helpful, concise, and friendly. When asked for code, you will always start with @.<correct extension of the type of code> and then the code"""
