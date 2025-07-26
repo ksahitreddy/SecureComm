@@ -61,9 +61,9 @@ app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER', 'ilike
 mail = Mail(app)
 
 # ---------------- AI Configuration ----------------
-GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
+GROQ_API_KEY = os.environ.get('GROQ_API_KEY', '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')
 GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions'
-GROQ_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct'
+GROQ_MODEL = 'moonshotai/kimi-k2-instruct'
 AI_SYSTEM_PROMPT = """You are SecureAI, an intelligent assistant integrated into SecureComm chat application. You help users with questions and provide information. Be helpful, concise, and friendly. When asked for code, you will always start with @.<correct extension of the type of code> and then the code"""
 MAX_CONTEXT_TOKENS = 8192
 
@@ -570,9 +570,11 @@ class MongoDBAuth:
             
             # Find users matching the query (case-insensitive)
             users_cursor = self.users.find({
-                "username": {"$regex": regex_pattern, "$options": 'i'},
-                "is_active": True,
-                "username": {"$ne": current_user}  # Exclude current user from results
+                "$and": [
+                    {"username": {"$regex": regex_pattern, "$options": 'i'}},
+                    {"username": {"$ne": current_user}}
+                ],
+                "is_active": True
             }, {"password": 0})  # Exclude password hash
             
             # Get list of online users for status
@@ -625,10 +627,18 @@ ICE_SERVERS = [
 
 @app.route('/')
 def index():
-    """Home page - redirect to login if not authenticated"""
+    """Home page - redirect to dashboard if authenticated, otherwise to welcome"""
     if 'username' in session:
         return redirect(url_for('dashboard'))
-    return redirect(url_for('login'))
+    return redirect(url_for('welcome'))
+
+@app.route('/welcome')
+def welcome():
+    """Welcome/landing page with login and register options"""
+    # If user is already logged in, redirect to dashboard
+    if 'username' in session:
+        return redirect(url_for('dashboard'))
+    return render_template('welcome.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -803,6 +813,11 @@ def dashboard_stats():
                 {'recipient': username}
             ]
         })
+        
+        # Messages sent by current user
+        messages_sent = _db['messages'].count_documents({
+            'sender': username
+        })
 
         # Distinct contacts user has chatted with
         contacts_cursor = _db['messages'].aggregate([
@@ -829,6 +844,7 @@ def dashboard_stats():
         return jsonify({
             'success': True,
             'total_messages': total_messages,
+            'messages_sent': messages_sent,
             'total_contacts': total_contacts
         })
 
