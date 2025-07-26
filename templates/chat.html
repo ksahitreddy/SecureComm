@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Chat with {{ recipient }} - SecureComm{% endblock %}
+{% block title %}Chat with {{ recipient }} - Secure Chat{% endblock %}
 
 {% block content %}
 <div class="row">
@@ -1253,6 +1253,10 @@ document.getElementById('send-button').addEventListener('click', function() {
         if (isFile) {
             contentElement.innerHTML = content; // safe because server already sanitized the link
         } else if (isPlaintext) {
+            // Highlight @SecureAI mention in messages
+            if (content.includes('@SecureAI')) {
+                content = content.replace(/@SecureAI/g, '<span class="ai-mention">@SecureAI</span>');
+            }
             const codeMatch = content.trim().match(/^@\.(\w+)\s([\s\S]*)/);
             if (codeMatch) {
                 const ext = codeMatch[1];
