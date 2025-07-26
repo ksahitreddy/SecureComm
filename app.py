@@ -4,6 +4,7 @@ Secure Chat Application with RSA Encryption
 Builds on the existing Flask authentication system
 Fixed: JSON serialization error with MongoDB ObjectId
 """
+
 import eventlet
 eventlet.monkey_patch()
 
@@ -41,7 +42,7 @@ app.secret_key = os.environ.get('SECRET_KEY', 'MIIEvQIBADANBgkqhkiG9w0BAQEFAASCB
 
 # File upload configuration
 ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'zip', }
-MAX_CONTENT_LENGTH = 10 * 1024 * 1024  # 10MB max file size
+MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 10MB max file size
 app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
 
 # Initialize SocketIO with CORS support
@@ -432,8 +433,27 @@ class MongoDBAuth:
                         .sort("timestamp", -1)
                         .limit(limit))
         
+        # Process messages to include appropriate encrypted content for the requesting user
+        processed_messages = []
+        for msg in messages:
+            processed_msg = msg.copy()
+            
+            # Determine which encrypted content to use based on who is requesting
+            if msg['sender'] == user1:
+                # user1 sent this message, so they need the sender version
+                processed_msg['encrypted_content'] = msg.get('encrypted_for_sender', msg.get('encrypted_content', ''))
+            else:
+                # user1 received this message, so they need the recipient version
+                processed_msg['encrypted_content'] = msg.get('encrypted_for_recipient', msg.get('encrypted_content', ''))
+            
+            # Remove the separate encrypted fields to avoid confusion
+            processed_msg.pop('encrypted_for_sender', None)
+            processed_msg.pop('encrypted_for_recipient', None)
+            
+            processed_messages.append(processed_msg)
+        
         # Convert ObjectId to string for JSON serialization
-        return self._serialize_documents(messages)
+        return self._serialize_documents(processed_messages)
         
     def search_users(self, query, current_user):
         """
@@ -1040,16 +1060,23 @@ def handle_message(data):
         message_id = secrets.token_urlsafe(16)
         is_recipient_online = recipient in active_connections
         
-        # Get recipient's public key
+        # Get both sender's and recipient's public keys
         recipient_public_key = mongo_auth.get_public_key(recipient)
+        sender_public_key = mongo_auth.get_public_key(sender)
+        
         if not recipient_public_key:
             emit('error', {'message': 'Recipient public key not found'})
             return
+        if not sender_public_key:
+            emit('error', {'message': 'Sender public key not found'})
+            return
         
-        # Encrypt the message
+        # Encrypt the message for both sender and recipient
         try:
-            encrypted_message = CryptoManager.encrypt_message(message, recipient_public_key)
-            if not encrypted_message:
+            encrypted_for_recipient = CryptoManager.encrypt_message(message, recipient_public_key)
+            encrypted_for_sender = CryptoManager.encrypt_message(message, sender_public_key)
+            
+            if not encrypted_for_recipient or not encrypted_for_sender:
                 emit('error', {'message': 'Failed to encrypt message'})
                 return
         except Exception as e:
@@ -1061,7 +1088,8 @@ def handle_message(data):
         message_doc = {
             'sender': sender,
             'recipient': recipient,
-            'encrypted_content': encrypted_message,
+            'encrypted_for_sender': encrypted_for_sender,
+            'encrypted_for_recipient': encrypted_for_recipient,
             'timestamp': datetime.utcnow(),
             'message_id': message_id,
             'delivered': is_recipient_online  # Mark as delivered if recipient is online
@@ -1077,7 +1105,7 @@ def handle_message(data):
                 'status': 'encrypted',
                 'recipient': recipient,
                 'original_length': len(message),
-                'encrypted_length': len(encrypted_message),
+                'encrypted_length': len(encrypted_for_recipient),
                 'timestamp': datetime.utcnow().isoformat()
             })
             
@@ -1087,7 +1115,7 @@ def handle_message(data):
                     socketio.emit('new_message', {
                         'message_id': message_id,
                         'sender': sender,
-                        'encrypted_content': encrypted_message,
+                        'encrypted_content': encrypted_for_recipient,
                         'timestamp': datetime.utcnow().isoformat(),
                         'delivered': True
                     }, room=active_connections[recipient])
@@ -1342,17 +1370,23 @@ def upload_file():
         # Create a file message that will be encrypted
         file_message = f"📎 {file.filename} ({format_file_size(file_size)}) [FILE]"
         
-        # Encrypt the file message with recipient's public key
+        # Encrypt the file message for both sender and recipient
         recipient_public_key = mongo_auth.get_public_key(recipient)
+        sender_public_key = mongo_auth.get_public_key(sender)
+        
         if not recipient_public_key:
             return jsonify({'success': False, 'message': 'Recipient public key not found'}), 400
+        if not sender_public_key:
+            return jsonify({'success': False, 'message': 'Sender public key not found'}), 400
             
-        encrypted_message = CryptoManager.encrypt_message(file_message, recipient_public_key)
-        if not encrypted_message:
+        encrypted_for_recipient = CryptoManager.encrypt_message(file_message, recipient_public_key)
+        encrypted_for_sender = CryptoManager.encrypt_message(file_message, sender_public_key)
+        
+        if not encrypted_for_recipient or not encrypted_for_sender:
             return jsonify({'success': False, 'message': 'Failed to encrypt file message'}), 500
         
         # Save the encrypted message
-        if not mongo_auth.save_message(sender, recipient, encrypted_message, message_id, is_file=True, file_info=file_info):
+        if not mongo_auth.save_message(sender, recipient, encrypted_for_recipient, message_id, is_file=True, file_info=file_info, enc_for_sender=encrypted_for_sender):
             return jsonify({'success': False, 'message': 'Failed to save file message'}), 500
         
         # Prepare response
@@ -1605,4 +1639,4 @@ def not_found_error(error):
 
 if __name__ == '__main__':
     # Run with TLS in production
-    socketio.run(app, debug=True, host='0.0.0.0', port=5000, certfile='cert.pem', keyfile='key.pem')
+    socketio.run(app, debug=True, host='0.0.0.0', port=5000)
