@@ -76,5 +76,91 @@ body {
 .code-header strong{font-size:0.85rem;color:#0d6efd;}
 .code-header .btn-link{color:#6c757d;}
 .code-header .btn-link:hover{color:#343a40;text-decoration:none;}
-.bubble pre{background:#000000;white-space:pre;font-family:monospace;border-radius:0 0 var(--radius) var(--radius);color:#ffffff;max-height:300px;overflow:auto;}
+.bubble pre{background:#f8f9fa;white-space:pre;font-family:monospace;border-radius:0 0 var(--radius) var(--radius);color:#212529;max-height:300px;overflow:auto;}
 
+/* ---- AI Message Styling ---- */
+.ai-message {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    color: white !important;
+    border: 2px solid #667eea;
+}
+
+.ai-message strong {
+    color: #fff !important;
+}
+
+/* Fix code snippets in AI messages */
+.ai-message .code-header {
+    background: #f8f9fa !important;
+    color: #212529 !important;
+    border-bottom: 1px solid #dee2e6 !important;
+}
+
+.ai-message .code-header strong {
+    color: #0d6efd !important;
+}
+
+.ai-message .code-header .btn-link {
+    color: #6c757d !important;
+}
+
+.ai-message .code-header .btn-link:hover {
+    color: #343a40 !important;
+}
+
+.ai-message pre {
+    background: #f8f9fa !important;
+    color: #212529 !important;
+}
+
+/* AI message header */
+.ai-header {
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
+    padding: 4px 8px;
+    border-radius: 4px 4px 0 0;
+    font-size: 0.8rem;
+    font-weight: bold;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+}
+
+.ai-header i {
+    margin-right: 6px;
+}
+
+/* ---- Typing Indicator ---- */
+.typing-indicator {
+    padding: 10px 15px;
+}
+
+.typing-dots {
+    display: inline-flex;
+    align-items: center;
+}
+
+.typing-dots span {
+    height: 6px;
+    width: 6px;
+    background-color: #fff;
+    border-radius: 50%;
+    display: inline-block;
+    margin: 0 1px;
+    animation: typing 1.4s infinite ease-in-out;
+}
+
+.typing-dots span:nth-child(1) { animation-delay: -0.32s; }
+.typing-dots span:nth-child(2) { animation-delay: -0.16s; }
+.typing-dots span:nth-child(3) { animation-delay: 0s; }
+
+@keyframes typing {
+    0%, 80%, 100% {
+        transform: scale(0.8);
+        opacity: 0.5;
+    }
+    40% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
