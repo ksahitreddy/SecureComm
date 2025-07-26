@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Chat with {{ recipient }} - SecureComm{% endblock %}
+{% block title %}Chat with {{ recipient }} - Secure Chat{% endblock %}
 
 {% block content %}
 <div class="row">
@@ -1233,6 +1233,12 @@ document.getElementById('send-button').addEventListener('click', function() {
         // Note: AI prompts use regular message styling (no special ai-message class)
         messageContent.className = bubbleClass;
         
+        // Add timestamp to the top-right corner of the bubble
+        const timeElement = document.createElement('div');
+        timeElement.className = 'message-time';
+        timeElement.textContent = formatTime(timestamp);
+        messageContent.appendChild(timeElement);
+        
         const senderElement = document.createElement('div');
         senderElement.className = 'message-sender d-none';
         senderElement.textContent = sender + ':';
@@ -1319,25 +1325,20 @@ document.getElementById('send-button').addEventListener('click', function() {
             statusElement.appendChild(document.createTextNode(status === 'delivered' ? '' : 'Not Delivered'));
         }
         
-        const timeElement = document.createElement('div');
-        timeElement.className = 'message-time';
-        timeElement.textContent = formatTime(timestamp);
-        
+        // Add sender and content to the message
         messageContent.appendChild(senderElement);
         messageContent.appendChild(contentElement);
         
-        messageElement.appendChild(messageContent);
-        
-        const metaElement = document.createElement('div');
-        metaElement.className = 'message-meta';
-        metaElement.appendChild(timeElement);
-        
+        // Add status indicator if it's a sent message
         if (statusElement) {
-            metaElement.appendChild(document.createTextNode(' • '));
-            metaElement.appendChild(statusElement);
+            const statusContainer = document.createElement('div');
+            statusContainer.className = 'message-status-container';
+            statusContainer.appendChild(statusElement);
+            messageContent.appendChild(statusContainer);
         }
         
-        messageElement.appendChild(metaElement);
+        // Add the message content to the message element
+        messageElement.appendChild(messageContent);
         
         chatContainer.appendChild(messageElement);
         scrollToBottom();
