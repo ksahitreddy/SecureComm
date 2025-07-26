@@ -10,3 +10,5 @@ Werkzeug
 bcrypt
 flask_pymongo
 flask-mail
+transformers
+requests
