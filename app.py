@@ -4,6 +4,8 @@ Secure Chat Application with RSA Encryption
 Builds on the existing Flask authentication system
 Fixed: JSON serialization error with MongoDB ObjectId
 """
+import eventlet
+eventlet.monkey_patch()
 
 from functools import wraps
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session, flash, send_from_directory
