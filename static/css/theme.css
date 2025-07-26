@@ -48,7 +48,7 @@ body {
   position: relative;
   margin-bottom: 4px;
 }
-.bubble.incoming {background: #ffffff; color:#1e293b; align-self:flex-start;}
+.bubble.incoming {background: #c298a6; color:#1e293b; align-self:flex-start;}
 .bubble.outgoing {background: var(--primary); color:#fff; align-self:flex-end;}
 
 /* Tail pseudo-elements */
@@ -144,6 +144,34 @@ body {
     z-index: 1;
 }
 
+/* Decryption Animation */
+@keyframes particle-explode {
+    0% {
+        transform: translate(0, 0) scale(1);
+        opacity: 1;
+    }
+    100% {
+        transform: translate(var(--tx), var(--ty)) scale(0);
+        opacity: 0;
+    }
+}
+
+.particle {
+    position: absolute;
+    pointer-events: none;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: particle-explode 1s ease-out forwards;
+    will-change: transform, opacity;
+}
+
+.message-decrypting {
+    position: relative;
+    overflow: hidden;
+}
+
 /* Status indicator styles */
 .message-status-container {
     display: flex;
@@ -165,9 +193,10 @@ body {
     font-size: 0.7rem;
 }
 
-/* Style for @SecureAI text in messages */
+/* Style for @SecureAI text and file links in messages */
 .bubble .message-text .secure-ai-tag,
-.message-content .secure-ai-tag {
+.message-content .secure-ai-tag,
+.bubble .message-text a.text-primary {
     color: #FFD700 !important;
     font-weight: bold !important;
     text-shadow: 0 0 3px rgba(0, 0, 0, 0.7) !important;
