@@ -1191,8 +1191,14 @@ document.getElementById('send-button').addEventListener('click', function() {
         const messageId = 'msg-' + Date.now();
         const timestamp = new Date().toISOString();
         
-        // Add message to UI immediately
-        addMessageToUI('{{ user.username }}', message, 'sent', timestamp, true, messageId, 'sending');
+        // Check if this is an AI message
+        const isAIMessage = message.trim().startsWith('@SecureAI ');
+        
+        // Add message to UI immediately only if it's not an AI message
+        // AI messages will be handled by the AI handler
+        if (!isAIMessage) {
+            addMessageToUI('{{ user.username }}', message, 'sent', timestamp, true, messageId, 'sending');
+        }
         
         // Send message via Socket.IO
         socket.emit('send_message', {
@@ -1206,7 +1212,7 @@ document.getElementById('send-button').addEventListener('click', function() {
         scrollToBottom();
     }
     
-    function addMessageToUI(sender, content, type, timestamp, isPlaintext = false, messageId = null, status = null, isFile = false) {
+    function addMessageToUI(sender, content, type, timestamp, isPlaintext = false, messageId = null, status = null, isFile = false, isAI = false, isAIPrompt = false) {
         // If message with this ID already exists, don't add it again
         if (messageId && document.querySelector(`[data-message-id="${messageId}"]`)) {
             return null;
@@ -1220,11 +1226,25 @@ document.getElementById('send-button').addEventListener('click', function() {
         messageElement.setAttribute('data-message-id', messageId);
         
         const messageContent = document.createElement('div');
-        messageContent.className = `bubble ${isSent ? 'outgoing' : 'incoming'}`;
+        let bubbleClass = `bubble ${isSent ? 'outgoing' : 'incoming'}`;
+        if (isAI) {
+            bubbleClass += ' ai-message';
+        }
+        // Note: AI prompts use regular message styling (no special ai-message class)
+        messageContent.className = bubbleClass;
         
         const senderElement = document.createElement('div');
         senderElement.className = 'message-sender d-none';
         senderElement.textContent = sender + ':';
+        
+        // Add AI header only for AI responses
+        if (isAI) {
+            const aiHeader = document.createElement('div');
+            aiHeader.className = 'ai-header';
+            aiHeader.innerHTML = '<i class="fas fa-robot"></i>SecureAI Answer';
+            messageContent.appendChild(aiHeader);
+        }
+        // Note: No header for AI prompts since @SecureAI prefix makes it clear
         
         const contentElement = document.createElement('div');
         contentElement.className = 'message-text';
@@ -1309,6 +1329,40 @@ document.getElementById('send-button').addEventListener('click', function() {
         }
         
         return messageElement; // Return the message element for status updates
+    }
+    
+    // AI Typing Indicator Functions
+    function showAITyping() {
+        // Remove existing typing indicator
+        hideAITyping();
+        
+        const typingElement = document.createElement('div');
+        typingElement.id = 'ai-typing-indicator';
+        typingElement.className = 'd-flex justify-content-start';
+        
+        const typingBubble = document.createElement('div');
+        typingBubble.className = 'bubble incoming ai-message typing-indicator';
+        typingBubble.innerHTML = `
+            <div class="ai-header">
+                <i class="fas fa-robot"></i>SecureAI is thinking...
+            </div>
+            <div class="d-flex align-items-center">
+                <div class="typing-dots">
+                    <span></span><span></span><span></span>
+                </div>
+            </div>
+        `;
+        
+        typingElement.appendChild(typingBubble);
+        chatContainer.appendChild(typingElement);
+        scrollToBottom();
+    }
+    
+    function hideAITyping() {
+        const typingIndicator = document.getElementById('ai-typing-indicator');
+        if (typingIndicator) {
+            typingIndicator.remove();
+        }
     }
     
     function updateMessageStatus(statusElement, status) {
@@ -1409,7 +1463,9 @@ document.getElementById('send-button').addEventListener('click', function() {
     function loadChatHistory() {
         try {
             // Safely parse messages from template data
-            const messages = JSON.parse('{{ messages | tojson | safe }}') || [];
+            const messagesJson = '{{ messages | tojson | safe }}';
+            console.log('Raw messages JSON from template:', messagesJson);
+            const messages = JSON.parse(messagesJson) || [];
             
             if (!Array.isArray(messages)) {
                 console.error('Invalid messages format:', messages);
@@ -1442,13 +1498,22 @@ document.getElementById('send-button').addEventListener('click', function() {
 
     
                 
-                // isSent already determined above
+                // Handle AI messages and regular messages
+                const isAIResponse = msg.is_ai_response || false;
+                const isAIPrompt = msg.is_ai_prompt || false;
+                const isPlaintext = msg.is_plaintext || isAIResponse || isAIPrompt;
+                
                 addMessageToUI(
                     msg.sender || 'Unknown', 
                     msg.encrypted_content || '', 
                     isSent ? 'sent' : 'received', 
                     msg.timestamp || new Date().toISOString(),
-                    false // Always encrypted in history
+                    isPlaintext, // AI messages are plaintext
+                    msg.message_id || null,
+                    msg.delivered ? 'delivered' : 'sent',
+                    false, // isFile
+                    isAIResponse, // isAI
+                    isAIPrompt // isAIPrompt
                 );
             });
             
@@ -1539,21 +1604,26 @@ document.getElementById('send-button').addEventListener('click', function() {
         }
         
         const isSent = data.sender === currentUser;
+        const isAIPrompt = data.is_ai_prompt || false;
+        const isPlaintext = data.is_plaintext || false;
+        
         const messageElement = addMessageToUI(
             data.sender,
-            data.encrypted_content,
+            data.content || data.encrypted_content,
             isSent ? 'sent' : 'received',
             data.timestamp || new Date().toISOString(),
-            false,  // isPlaintext
+            isPlaintext,  // Use plaintext flag
             data.message_id,
             data.delivered ? 'delivered' : 'sent',
-            data.is_file
+            data.is_file || false,
+            false, // isAI
+            isAIPrompt // isAIPrompt
         );
         
         if (!messageElement) return;
         
-        // If this is an incoming message, try to decrypt it
-        if (!isSent) {
+        // If this is an incoming message and not plaintext, try to decrypt it
+        if (!isSent && !isPlaintext) {
             decryptMessage(messageElement, data.encrypted_content, data.message_id);
         }
         
@@ -1680,6 +1750,53 @@ document.getElementById('send-button').addEventListener('click', function() {
     socket.on('error', function(data) {
         addEncryptionLog('❌ Error: ' + (data.message || 'Unknown error'), 'danger');
         console.error('Socket error:', data);
+    });
+    
+    // AI Message Handlers
+    socket.on('ai_request_received', function(data) {
+        addEncryptionLog('🤖 AI request received: ' + data.prompt.substring(0, 50) + '...', 'info');
+        // Note: Don't add the AI request to UI here - it's already handled by regular message flow
+    });
+    
+    socket.on('ai_typing', function(data) {
+        // Show typing indicator for AI
+        showAITyping();
+    });
+    
+    socket.on('ai_response', function(data) {
+        hideAITyping();
+        addEncryptionLog('🤖 AI response received', 'success');
+        
+        // Add AI response to chat
+        addMessageToUI(
+            'SecureAI',
+            data.content,
+            'received',
+            data.timestamp,
+            true,
+            data.message_id,
+            'delivered',
+            false,
+            true  // isAI flag
+        );
+    });
+    
+    socket.on('ai_error', function(data) {
+        hideAITyping();
+        addEncryptionLog('❌ AI Error: ' + data.error, 'danger');
+        
+        // Add error message to chat
+        addMessageToUI(
+            'SecureAI',
+            '🚨 Sorry, I encountered an error: ' + data.error,
+            'received',
+            new Date().toISOString(),
+            true,
+            'ai-error-' + Date.now(),
+            'delivered',
+            false,
+            true  // isAI flag
+        );
     });
     
     // Handle connection events
