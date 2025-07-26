@@ -114,6 +114,13 @@ body {
     border: 1px solid #333 !important;
 }
 
+/* Style for @SecureAI mention in messages */
+.message-content .ai-mention {
+    color: #ffd700 !important; /* Gold color for visibility */
+    font-weight: bold;
+    text-shadow: 0 0 3px rgba(0,0,0,0.5);
+}
+
 /* AI message header */
 .ai-header {
     background: rgba(255, 255, 255, 0.2);
