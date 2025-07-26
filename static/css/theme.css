@@ -114,11 +114,13 @@ body {
     border: 1px solid #333 !important;
 }
 
-/* Style for @SecureAI mention in messages */
-.message-content .ai-mention {
-    color: #ffd700 !important; /* Gold color for visibility */
-    font-weight: bold;
-    text-shadow: 0 0 3px rgba(0,0,0,0.5);
+/* Style for @SecureAI text in messages */
+.bubble .message-text .secure-ai-tag,
+.message-content .secure-ai-tag {
+    color: #FFD700 !important;
+    font-weight: bold !important;
+    text-shadow: 0 0 3px rgba(0, 0, 0, 0.7) !important;
+    -webkit-text-fill-color: #FFD700 !important;
 }
 
 /* AI message header */
