@@ -31,6 +31,8 @@ import secrets
 import re
 import mimetypes
 from flask_mail import Mail, Message
+import requests
+from transformers import AutoTokenizer
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -57,6 +59,17 @@ app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', 'jwsm rlev xbqs iy
 app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER', 'iliketrainshm59@gmail.com')
 
 mail = Mail(app)
+
+# ---------------- AI Configuration ----------------
+GROQ_API_KEY = os.environ.get('GROQ_API_KEY', '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')
+GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions'
+GROQ_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct'
+AI_SYSTEM_PROMPT = """You are SecureAI, an intelligent assistant integrated into SecureComm chat application. You help users with questions and provide information. Be helpful, concise, and friendly. When asked for code, you will always start with @.<correct extension of the type of code> and then the code"""
+MAX_CONTEXT_TOKENS = 8192
+
+# Initialize tokenizer for AI (disabled for now to avoid startup issues)
+ai_tokenizer = None
+logger.info('AI tokenizer disabled - using simple token counting')
 
 # MongoDB Configuration
 MONGO_URI = os.environ.get('MONGO_URI', 'mongodb+srv://admins:4postr0phe@stock.sxr4y.mongodb.net/securecomm_db?retryWrites=true&w=majority&appName=Stock')
@@ -200,6 +213,79 @@ class CryptoManager:
         except Exception as e:
             logger.error(f"Unexpected error in decrypt_message: {e}", exc_info=True)
             return None
+
+# ---------------- AI Helper Functions ----------------
+class AIManager:
+    @staticmethod
+    def count_tokens(messages):
+        """Count tokens in messages using tokenizer"""
+        if not ai_tokenizer:
+            # Fallback: rough estimation
+            combined = ''.join([f"{m['role']}: {m['content']}\n" for m in messages])
+            return len(combined) // 4  # Rough token estimation
+        
+        combined = ''.join([f"{m['role']}: {m['content']}\n" for m in messages])
+        return len(ai_tokenizer.encode(combined))
+    
+    @staticmethod
+    def query_ai(prompt, history=None):
+        """Query Groq AI with prompt and optional history"""
+        try:
+            headers = {
+                'Content-Type': 'application/json',
+                'Authorization': f'Bearer {GROQ_API_KEY}'
+            }
+            
+            messages = [{'role': 'system', 'content': AI_SYSTEM_PROMPT}]
+            
+            # Add history if provided
+            if history:
+                for msg in reversed(history[-10:]):  # Last 10 messages
+                    if AIManager.count_tokens(messages + [msg, {'role': 'user', 'content': prompt}]) < MAX_CONTEXT_TOKENS:
+                        messages.insert(1, msg)
+                    else:
+                        break
+            
+            # Truncate prompt if too long
+            if ai_tokenizer:
+                prompt_tokens = ai_tokenizer.encode(prompt)
+                if len(prompt_tokens) > MAX_CONTEXT_TOKENS:
+                    prompt_tokens = prompt_tokens[:MAX_CONTEXT_TOKENS]
+                    prompt = ai_tokenizer.decode(prompt_tokens)
+            
+            messages.append({'role': 'user', 'content': prompt})
+            
+            payload = {
+                'model': GROQ_MODEL,
+                'messages': messages,
+                'max_tokens': 6000,
+                'temperature': 0.4,
+                'stream': False
+            }
+            
+            response = requests.post(GROQ_API_URL, headers=headers, json=payload, timeout=30)
+            response.raise_for_status()
+            
+            return response.json()['choices'][0]['message']['content']
+            
+        except requests.exceptions.RequestException as e:
+            logger.error(f'AI API request failed: {e}')
+            return f'🚨 AI service temporarily unavailable: {str(e)}'
+        except Exception as e:
+            logger.error(f'AI query error: {e}', exc_info=True)
+            return f'🚨 AI error: {str(e)}'
+    
+    @staticmethod
+    def is_ai_message(message):
+        """Check if message is an AI command"""
+        return message.strip().startswith('@SecureAI ')
+    
+    @staticmethod
+    def extract_ai_prompt(message):
+        """Extract prompt from AI message"""
+        if AIManager.is_ai_message(message):
+            return message.strip()[10:].strip()  # Remove '@SecureAI '
+        return None
 
 class MongoDBAuth:
     def __init__(self, mongo_db):
@@ -424,27 +510,43 @@ class MongoDBAuth:
         query = {
             "$or": [
                 {"$and": [{"sender": user1}, {"recipient": user2}]},
-                {"$and": [{"sender": user2}, {"recipient": user1}]}
+                {"$and": [{"sender": user2}, {"recipient": user1}]},
+                {"$and": [{"sender": "SecureAI"}, {"$or": [{"recipient": user1}, {"recipient": user2}]}]}
             ]
         }
+        
+        logger.info(f'Getting messages between {user1} and {user2} with query: {query}')
         
         messages = list(self.messages
                         .find(query)
                         .sort("timestamp", -1)
                         .limit(limit))
         
+        logger.info(f'Found {len(messages)} messages in database')
+        
         # Process messages to include appropriate encrypted content for the requesting user
         processed_messages = []
         for msg in messages:
             processed_msg = msg.copy()
             
-            # Determine which encrypted content to use based on who is requesting
-            if msg['sender'] == user1:
-                # user1 sent this message, so they need the sender version
+            # Handle AI messages (stored as plaintext)
+            if msg.get('is_ai_response') or msg.get('is_ai_prompt'):
+                # AI messages are stored as plaintext, no decryption needed
                 processed_msg['encrypted_content'] = msg.get('encrypted_for_sender', msg.get('encrypted_content', ''))
+                processed_msg['is_plaintext'] = True
+                if msg.get('is_ai_response'):
+                    processed_msg['is_ai_response'] = True
+                if msg.get('is_ai_prompt'):
+                    processed_msg['is_ai_prompt'] = True
             else:
-                # user1 received this message, so they need the recipient version
-                processed_msg['encrypted_content'] = msg.get('encrypted_for_recipient', msg.get('encrypted_content', ''))
+                # Regular encrypted messages
+                # Determine which encrypted content to use based on who is requesting
+                if msg['sender'] == user1:
+                    # user1 sent this message, so they need the sender version
+                    processed_msg['encrypted_content'] = msg.get('encrypted_for_sender', msg.get('encrypted_content', ''))
+                else:
+                    # user1 received this message, so they need the recipient version
+                    processed_msg['encrypted_content'] = msg.get('encrypted_for_recipient', msg.get('encrypted_content', ''))
             
             # Remove the separate encrypted fields to avoid confusion
             processed_msg.pop('encrypted_for_sender', None)
@@ -453,7 +555,9 @@ class MongoDBAuth:
             processed_messages.append(processed_msg)
         
         # Convert ObjectId to string for JSON serialization
-        return self._serialize_documents(processed_messages)
+        result = self._serialize_documents(processed_messages)
+        logger.info(f'Returning {len(result)} processed messages to frontend')
+        return result
         
     def search_users(self, query, current_user):
         """
@@ -823,6 +927,7 @@ def chat(recipient):
     
     # Get messages between the two users
     messages = mongo_auth.get_messages(username, recipient)
+    logger.info(f'Chat route: Got {len(messages)} messages for template')
     
     # Get online status of the recipient
     online_users = mongo_auth.get_online_users()
@@ -1046,6 +1151,156 @@ def on_disconnect():
     else:
         logger.warning(f"Unknown session disconnected: {request.sid}")
 
+def handle_ai_message(sender, recipient, message, message_id):
+    """Handle AI message requests"""
+    try:
+        # Extract the AI prompt
+        prompt = AIManager.extract_ai_prompt(message)
+        if not prompt:
+            emit('error', {'message': 'Invalid AI command'})
+            return
+        
+        # Get recent chat history for context (optional)
+        try:
+            recent_messages = mongo_auth.get_messages(sender, recipient, limit=10)
+            history = []
+            for msg in recent_messages:
+                if msg.get('sender') == sender:
+                    history.append({'role': 'user', 'content': msg.get('decrypted_content', '')})
+                else:
+                    history.append({'role': 'assistant', 'content': msg.get('decrypted_content', '')})
+        except Exception as e:
+            logger.warning(f'Could not get chat history for AI context: {e}')
+            history = None
+        
+        # Store the AI prompt message for both users
+        prompt_message_doc = {
+            'sender': sender,
+            'recipient': recipient,
+            'encrypted_for_sender': message,  # Store as plaintext for AI prompts
+            'encrypted_for_recipient': message,  # Store as plaintext for AI prompts
+            'timestamp': datetime.utcnow(),
+            'message_id': message_id,
+            'delivered': True,
+            'is_ai_prompt': True
+        }
+        
+        # Save AI prompt to database
+        mongo_auth.messages.insert_one(prompt_message_doc)
+        
+        # Send AI prompt to both users
+        sender_sid = active_connections.get(sender)
+        recipient_sid = active_connections.get(recipient)
+        
+        prompt_data = {
+            'message_id': message_id,
+            'sender': sender,
+            'content': message,
+            'timestamp': datetime.utcnow().isoformat(),
+            'delivered': True,
+            'is_plaintext': True,
+            'is_ai_prompt': True
+        }
+        
+        # Send to sender
+        if sender_sid:
+            socketio.emit('new_message', prompt_data, room=sender_sid)
+        
+        # Send to recipient if online
+        if recipient_sid:
+            socketio.emit('new_message', prompt_data, room=recipient_sid)
+        
+        # Send typing indicator to both users
+        typing_data = {
+            'message_id': message_id,
+            'sender': 'SecureAI',
+            'recipient': sender
+        }
+        
+        # Send to sender
+        if sender_sid:
+            socketio.emit('ai_typing', typing_data, room=sender_sid)
+        
+        # Send to recipient if online
+        if recipient_sid:
+            socketio.emit('ai_typing', typing_data, room=recipient_sid)
+        
+        # Query AI in background
+        def query_ai_async():
+            try:
+                ai_response = AIManager.query_ai(prompt, history)
+                
+                # Create AI response message
+                ai_message_id = secrets.token_urlsafe(16)
+                
+                # Store AI message as plaintext (no encryption needed for AI responses)
+                # Store AI response for both users in the conversation
+                ai_message_doc = {
+                    'sender': 'SecureAI',
+                    'recipient': recipient,  # Store with original recipient
+                    'encrypted_for_sender': ai_response,  # Store as plaintext
+                    'encrypted_for_recipient': ai_response,  # Store as plaintext
+                    'timestamp': datetime.utcnow(),
+                    'message_id': ai_message_id,
+                    'delivered': True,
+                    'is_ai_response': True
+                }
+                
+                # Save to database
+                mongo_auth.messages.insert_one(ai_message_doc)
+                
+                # Send AI response to both users in the chat
+                sender_sid = active_connections.get(sender)
+                recipient_sid = active_connections.get(recipient)
+                
+                ai_response_data = {
+                    'message_id': ai_message_id,
+                    'sender': 'SecureAI',
+                    'content': ai_response,
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'original_prompt': prompt
+                }
+                
+                # Send to sender
+                if sender_sid:
+                    socketio.emit('ai_response', ai_response_data, room=sender_sid)
+                    logger.info(f'AI response sent to {sender} (sid: {sender_sid})')
+                
+                # Send to recipient if online
+                if recipient_sid:
+                    socketio.emit('ai_response', ai_response_data, room=recipient_sid)
+                    logger.info(f'AI response sent to {recipient} (sid: {recipient_sid})')
+                
+                if not sender_sid and not recipient_sid:
+                    logger.warning(f'Neither {sender} nor {recipient} found in active connections for AI response')
+                
+                logger.info(f'AI response sent to {sender} for prompt: {prompt[:50]}...')
+                
+            except Exception as e:
+                logger.error(f'AI async query error: {e}', exc_info=True)
+                sender_sid = active_connections.get(sender)
+                if sender_sid:
+                    socketio.emit('ai_error', {
+                        'message_id': message_id,
+                        'error': str(e)
+                    }, room=sender_sid)
+                else:
+                    logger.warning(f'User {sender} not found in active connections for AI error')
+        
+        # Run AI query in background thread
+        socketio.start_background_task(query_ai_async)
+        
+        # Send confirmation that AI request was received
+        emit('ai_request_received', {
+            'message_id': message_id,
+            'prompt': prompt,
+            'timestamp': datetime.utcnow().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f'Handle AI message error: {e}', exc_info=True)
+        emit('error', {'message': 'Failed to process AI request'})
+
 @socketio.on('send_message')
 def handle_message(data):
     """Handle encrypted message sending with offline support"""
@@ -1059,6 +1314,13 @@ def handle_message(data):
         message = data['message']
         message_id = secrets.token_urlsafe(16)
         is_recipient_online = recipient in active_connections
+        
+        # Check if this is an AI message
+        logger.info(f'Checking message from {sender}: "{message}"')
+        if AIManager.is_ai_message(message):
+            logger.info(f'AI message detected from {sender}: {message}')
+            handle_ai_message(sender, recipient, message, message_id)
+            return
         
         # Get both sender's and recipient's public keys
         recipient_public_key = mongo_auth.get_public_key(recipient)
@@ -1097,6 +1359,7 @@ def handle_message(data):
         
         # Save to database
         result = mongo_auth.messages.insert_one(message_doc)
+        logger.info(f'Message saved to database with ID: {result.inserted_id}')
         
         if result.inserted_id:
             # Send encryption status to sender
